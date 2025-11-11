@@ -59,6 +59,33 @@
 ### [`zfs-tune.py`](zfs-tune.py)
 * optimizes databases for optimal performance when stored on a zfs filesystem; also see [openzfs docs](https://openzfs.github.io/openzfs-docs/Performance%20and%20Tuning/Workload%20Tuning.html#database-workloads) and specifically the SQLite subsection
 
+# Infrastructure as Code (IaC) for Synology NAS
+automated deployment and management of copyparty on Synology NAS devices
+
+### [`iac/`](iac/)
+* comprehensive infrastructure as code solutions for Synology NAS
+* includes Terraform/OpenTofu, Ansible, and MCP server
+* see [IaC README](iac/README.md) for comparison and quick start
+
+### [`iac/terraform/`](iac/terraform/)
+* Terraform/OpenTofu configuration for declarative infrastructure
+* state management and drift detection
+* version-controlled, reproducible deployments
+* supports multiple Synology devices with workspaces
+
+### [`iac/ansible/`](iac/ansible/)
+* Ansible playbook for automated deployment and configuration
+* multi-host support for deploying to multiple NAS devices
+* idempotent and easy to learn
+* includes inventory management and group variables
+
+### [`mcp-synology/`](mcp-synology/)
+* Model Context Protocol (MCP) server for AI-assisted NAS management
+* works with Claude Desktop and Claude Code
+* natural language interface for container management
+* exposes tools, resources, and prompts for Synology operations
+* includes Docker management, system monitoring, and copyparty deployment
+
 # OS integration
 init-scripts to start copyparty as a service
 * [`systemd/copyparty.service`](systemd/copyparty.service) runs the sfx normally

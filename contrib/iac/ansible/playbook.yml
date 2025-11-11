@@ -1,0 +1,147 @@
+---
+# Ansible playbook for deploying copyparty on Synology NAS
+# Usage: ansible-playbook -i inventory.ini playbook.yml --ask-pass
+
+- name: Deploy copyparty on Synology NAS
+  hosts: synology
+  gather_facts: yes
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    copyparty_image: "copyparty/ac:latest"
+    copyparty_port: 3923
+    copyparty_container_name: "copyparty"
+
+    # Volume paths - customize these!
+    config_volume: "/volume2/configs/cpp"
+    nvme_volume: "/volume2/media-nvme"
+    archive_volume: "/volume1/media-archive"
+
+    # Container environment
+    puid: "1000"
+    pgid: "100"
+    timezone: "UTC"
+
+  tasks:
+    - name: Check if Python is installed
+      raw: test -e /usr/bin/python3
+      register: python_check
+      changed_when: false
+      failed_when: false
+
+    - name: Gather facts after Python check
+      setup:
+      when: python_check.rc == 0
+
+    - name: Install pip if not present
+      raw: |
+        if ! command -v pip3 &> /dev/null; then
+          wget https://bootstrap.pypa.io/get-pip.py -O /tmp/get-pip.py
+          python3 /tmp/get-pip.py --user
+        fi
+      args:
+        executable: /bin/bash
+      when: python_check.rc == 0
+
+    - name: Install Docker Python SDK
+      pip:
+        name: docker
+        state: present
+        executable: pip3
+      become: yes
+
+    - name: Ensure config directories exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ config_volume }}"
+        - "{{ nvme_volume }}"
+        - "{{ archive_volume }}"
+      become: yes
+
+    - name: Check if copyparty config exists
+      stat:
+        path: "{{ config_volume }}/copyparty.conf"
+      register: config_file
+
+    - name: Create default copyparty config
+      copy:
+        dest: "{{ config_volume }}/copyparty.conf"
+        content: |
+          [global]
+            e2d, e2t         # enable uploads database & media tags
+            e2ts             # enable multimedia indexing
+            rss, daw, ver    # additional features
+            hist: /cfg/hist  # keep indexes tidy
+            name: synology   # server name
+            grid             # show thumbnails by default
+
+          [accounts]
+            admin: changeme123   # CHANGE THIS!
+
+          [/nvme]
+            /w/nvme
+            accs:
+              rwmda: admin
+
+          [/archive]
+            /w/archive
+            accs:
+              rwmda: admin
+
+          [/]
+            accs:
+              r: *
+              rwmda: admin
+
+          [/@eaDir]
+            /w/nvme/@eaDir
+            /w/archive/@eaDir
+        mode: '0644'
+      become: yes
+      when: not config_file.stat.exists
+
+    - name: Pull copyparty Docker image
+      docker_image:
+        name: "{{ copyparty_image }}"
+        source: pull
+        state: present
+
+    - name: Deploy copyparty container
+      docker_container:
+        name: "{{ copyparty_container_name }}"
+        image: "{{ copyparty_image }}"
+        state: started
+        restart_policy: unless-stopped
+        ports:
+          - "{{ copyparty_port }}:3923"
+        volumes:
+          - "{{ config_volume }}:/cfg"
+          - "{{ nvme_volume }}:/w/nvme"
+          - "{{ archive_volume }}:/w/archive"
+        env:
+          PUID: "{{ puid }}"
+          PGID: "{{ pgid }}"
+          TZ: "{{ timezone }}"
+        comparisons:
+          image: strict
+          env: strict
+          volumes: allow_more_present
+
+    - name: Wait for copyparty to be ready
+      uri:
+        url: "http://localhost:{{ copyparty_port }}"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 12
+      delay: 5
+
+    - name: Display success message
+      debug:
+        msg:
+          - "copyparty has been successfully deployed!"
+          - "Access it at: http://{{ ansible_host }}:{{ copyparty_port }}"
+          - "Default credentials: admin / changeme123"
+          - "IMPORTANT: Change the password in {{ config_volume }}/copyparty.conf"
