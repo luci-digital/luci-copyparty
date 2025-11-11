@@ -1,0 +1,29 @@
+---
+# Group variables for Synology hosts
+# Customize these for your environment
+
+# copyparty configuration
+copyparty_image: "copyparty/ac:latest"  # Options: min, im, ac (recommended), iv, dj
+copyparty_port: 3923
+copyparty_container_name: "copyparty"
+
+# Volume paths - adjust to match your Synology setup
+# For DS923+ with NVMe RAID 1 + HDD setup:
+config_volume: "/volume2/configs/cpp"       # NVMe - config & database
+nvme_volume: "/volume2/media-nvme"          # NVMe - hot data
+archive_volume: "/volume1/media-archive"    # HDD - cold storage
+
+# For single volume setups, use:
+# config_volume: "/volume1/configs/cpp"
+# nvme_volume: "/volume1/media"
+# archive_volume: "/volume1/media"
+
+# Container environment
+puid: "1000"  # Get with: ssh admin@nas "id -u"
+pgid: "100"   # Get with: ssh admin@nas "id -g"
+timezone: "America/New_York"  # Your timezone
+
+# Advanced options
+# copyparty_extra_env:
+#   LANG: "en_US.UTF-8"
+#   LOG_LEVEL: "debug"
