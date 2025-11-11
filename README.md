@@ -1,3 +1,5 @@
+> **🚀 Enhanced by Luci Digital:** This fork includes [enterprise IaC tooling](LUCI_README.md) (Terraform, Ansible, MCP) for Synology NAS. [Quick Start →](QUICK_START_LUCI.md) | [View Enhancements →](LUCI_ENHANCEMENTS.md)
+
 <img src="https://github.com/9001/copyparty/raw/hovudstraum/docs/logo.svg" width="250" align="right"/>
 
 ### 💾🎉 copyparty
