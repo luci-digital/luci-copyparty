@@ -1,5 +1,16 @@
 # Infrastructure as Code (IaC) for copyparty on Synology NAS
 
+> **Enhanced by Luci Digital** • [View All Enhancements](../../LUCI_ENHANCEMENTS.md)
+
+<div align="center">
+
+[![Terraform](https://img.shields.io/badge/Terraform-Compatible-7B42BC?logo=terraform)](terraform/)
+[![Ansible](https://img.shields.io/badge/Ansible-Ready-EE0000?logo=ansible)](ansible/)
+[![MCP](https://img.shields.io/badge/MCP-Enabled-00A67E)](../mcp-synology/)
+[![Synology](https://img.shields.io/badge/Synology-Optimized-orange)]()
+
+</div>
+
 Comprehensive Infrastructure as Code solutions for deploying and managing copyparty on Synology NAS devices.
 
 ## Overview
