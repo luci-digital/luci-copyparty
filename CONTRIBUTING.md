@@ -1,8 +1,21 @@
-* do something cool
+* **found a bug?** [create an issue!](https://github.com/9001/copyparty/issues) or let me know in the [discord](https://discord.gg/25J8CdTT6G) :>
+* **fixed a bug?** create a PR or post a patch! big thx in advance :>
+* **have a cool idea?** let's discuss it! anywhere's fine, you choose.
 
-really tho, send a PR or an issue or whatever, all appreciated, anything goes, just behave aight 👍👍
+but please:
 
-but to be more specific,
+
+
+# do not use AI / LLM when writing code
+
+copyparty is 100% organic, free-range, human-written software!
+
+> ⚠ you are now entering a no-copilot zone
+
+the *only* place where LLM/AI *may* be accepted is for [localization](https://github.com/9001/copyparty/tree/hovudstraum/docs/rice#translations) if you are fluent and have confirmed that the translation is accurate.
+
+sorry for the harsh tone, but this is important to me 🙏
+
 
 
 # contribution ideas
@@ -26,7 +39,9 @@ if you wanna have a go at coding it up yourself then maybe mention the idea on d
 
 aside from documentation and ideas, some other things that would be cool to have some help with is:
 
-* **translations** -- the copyparty web-UI has translations for english and norwegian at the top of [browser.js](https://github.com/9001/copyparty/blob/hovudstraum/copyparty/web/browser.js); if you'd like to add a translation for another language then that'd be welcome! and if that language has a grammar that doesn't fit into the way the strings are assembled, then we'll fix that as we go :>
+* **translations** -- the copyparty web-UI has translations in [copyparty/web/tl](https://github.com/9001/copyparty/tree/hovudstraum/copyparty/web/tl); if you'd like to [add a translation](https://github.com/9001/copyparty/tree/hovudstraum/docs/rice#translations) for another language then that'd be welcome! and if that language has a grammar that doesn't fit into the way the strings are assembled, then we'll fix that as we go :>
+
+  * but please note that support for [RTL (Right-to-Left) languages](https://en.wikipedia.org/wiki/Right-to-left_script) is currently not planned, since the javascript is a bit too jank for that
 
 * **UI ideas** -- at some point I was thinking of rewriting the UI in react/preact/something-not-vanilla-javascript, but I'll admit the comfiness of not having any build stage combined with raw performance has kinda convinced me otherwise :p but I'd be very open to ideas on how the UI could be improved, or be more intuitive.
 

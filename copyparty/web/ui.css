@@ -1,4 +1,8 @@
 :root {
+	--font-main: sans-serif;
+	--font-serif: serif;
+	--font-mono: 'scp';
+
 	--fg: #ccc;
 	--fg-max: #fff;
 	--bg-u2: #2b2b2b;
@@ -65,6 +69,18 @@ html {
 	top: 2em;
 	bottom: unset;
 }
+#toastt {
+	position: absolute;
+	height: 1px;
+	top: 1px;
+	right: 1px;
+	left: 1px;
+	animation: toastt var(--tmtime) 0.07s steps(var(--tmstep)) forwards;
+	transform-origin: right;
+}
+@keyframes toastt {
+	to {transform: scaleX(0)}
+}
 #toast a {
 	color: inherit;
 	text-shadow: inherit;
@@ -105,6 +121,9 @@ html {
 #toast pre {
 	margin: 0;
 }
+#toast.hide {
+	display: none;
+}
 #toast.vis {
 	right: 1.3em;
 	transform: inherit;
@@ -123,12 +142,18 @@ html {
 #toast.inf #toastc {
 	background: #0be;
 }
+#toast.inf #toastt {
+	background: #8ef;
+}
 #toast.ok {
 	background: #380;
 	border-color: #8e4;
 }
 #toast.ok #toastc {
 	background: #8e4;
+}
+#toast.ok #toastt {
+	background: #cf9;
 }
 #toast.warn {
 	background: #960;
@@ -137,12 +162,22 @@ html {
 #toast.warn #toastc {
 	background: #fc0;
 }
+#toast.warn #toastt {
+	background: #fe9;
+}
 #toast.err {
 	background: #900;
 	border-color: #d06;
 }
 #toast.err #toastc {
 	background: #d06;
+}
+#toast.err #toastt {
+	background: #f9c;
+}
+#toast code {
+	padding: 0 .2em;
+	background: rgba(0,0,0,0.2);
 }
 #tth {
 	color: #fff;
@@ -173,6 +208,7 @@ html {
 	padding: 1.5em 2em;
 	border-width: .5em 0;
 }
+.logue code,
 #modalc code,
 #tt code {
 	color: #eee;
@@ -253,7 +289,11 @@ html.y #tth {
     box-shadow: 0 .3em 3em rgba(0,0,0,0.5);
 	max-width: 50em;
 	max-height: 30em;
-	overflow: auto;
+	overflow-x: auto;
+	overflow-y: scroll;
+}
+#modalc.yk {
+	overflow-y: auto;
 }
 #modalc td {
 	text-align: unset;
@@ -276,6 +316,14 @@ html.y #tth {
 }
 #modalc a {
 	color: #07b;
+}
+#modalc .b64 {
+	display: block;
+	margin: .1em auto;
+	width: 60%;
+	height: 60%;
+	background: #999;
+	background: rgba(128,128,128,0.2);
 }
 #modalb {
 	position: sticky;
@@ -333,6 +381,9 @@ html.y .btn:focus {
 	box-shadow: 0 .1em .2em #037 inset;
 	outline: #037 solid .1em;
 }
+input, button {
+	font-family: var(--font-main), sans-serif;
+}
 input[type="submit"] {
 	cursor: pointer;
 }
@@ -369,13 +420,24 @@ html.y textarea:focus {
 }
 .mdo pre,
 .mdo code,
+.mdo code[class*="language-"],
 .mdo tt {
 	font-family: 'scp', monospace, monospace;
+	font-family: var(--font-mono), 'scp', monospace, monospace;
 	white-space: pre-wrap;
 	word-break: break-all;
 }
 .mdo code {
 	font-size: .96em;
+}
+html.z .mdo a>code,
+html.y .mdo a>code {
+	color: inherit;
+	background: inherit;
+	background: rgba(0, 0, 0, 0.2);
+	padding-top: 0;
+	padding-bottom: 0;
+	border: none;
 }
 .mdo h1,
 .mdo h2 {
@@ -440,6 +502,7 @@ html.y textarea:focus {
 }
 .mdo blockquote {
 	font-family: serif;
+	font-family: var(--font-serif), serif;
 	background: #f7f7f7;
 	border: .07em dashed #ccc;
 	padding: 0 2em;
@@ -571,5 +634,13 @@ hr {
 	html.z .mdo blockquote {
 		background: #282828;
 		border: .07em dashed #444;
+	}
+}
+
+@media (prefers-reduced-motion) {
+	#toast,
+	#toast a#toastc,
+	#tt {
+		transition: none;
 	}
 }

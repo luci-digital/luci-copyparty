@@ -1,0 +1,32 @@
+# Ansible files
+*.retry
+.vault_pass
+inventory.ini
+!inventory.ini.example
+
+# Secrets
+*vault*
+!group_vars/vault.example.yml
+secrets.yml
+
+# Logs
+*.log
+
+# Environment files
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# SSH keys
+*.pem
+*.key
+!*.key.example

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # coding: latin-1
 from __future__ import print_function, unicode_literals
-import re, os, sys, time, shutil, signal, threading, tarfile, hashlib, platform, tempfile, traceback
+import re, os, sys, time, shutil, signal, tarfile, hashlib, platform, tempfile, traceback
 import subprocess as sp
 
 
@@ -234,8 +234,9 @@ def u8(gen):
 
 
 def yieldfile(fn):
-    with open(fn, "rb") as f:
-        for block in iter(lambda: f.read(64 * 1024), b""):
+    s = 64 * 1024
+    with open(fn, "rb", s * 4) as f:
+        for block in iter(lambda: f.read(s), b""):
             yield block
 
 
@@ -367,17 +368,6 @@ def get_payload():
             p = a
 
 
-def utime(top):
-    # avoid cleaners
-    files = [os.path.join(dp, p) for dp, dd, df in os.walk(top) for p in dd + df]
-    while True:
-        t = int(time.time())
-        for f in [top] + files:
-            os.utime(f, (t, t))
-
-        time.sleep(78123)
-
-
 def confirm(rv):
     msg()
     msg("retcode", rv if rv else traceback.format_exc())
@@ -397,9 +387,7 @@ def run(tmp, j2, ftp):
     msg("sfxdir:", tmp)
     msg()
 
-    t = threading.Thread(target=utime, args=(tmp,))
-    t.daemon = True
-    t.start()
+    sys.argv.append("--sfx-tpoke=" + tmp)
 
     ld = (("", ""), (j2, "j2"), (ftp, "ftp"), (not PY2, "py2"), (PY37, "py37"))
     ld = [os.path.join(tmp, b) for a, b in ld if not a]
@@ -425,6 +413,9 @@ def run_i(ld):
     for x in ld:
         sys.path.insert(0, x)
 
+    e = os.environ
+    e["PRTY_NO_IMPRESO"] = "1"
+
     from copyparty.__main__ import main as p
 
     p()
@@ -448,6 +439,8 @@ def run_s(ld):
 
 
 def main():
+    if "--versionb" in sys.argv:
+        return print(VER)
     sysver = str(sys.version).replace("\n", "\n" + " " * 18)
     pktime = time.strftime("%Y-%m-%d, %H:%M:%S", time.gmtime(STAMP))
     msg()

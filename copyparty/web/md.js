@@ -17,14 +17,13 @@ var chromedbg = function () { console.log(arguments); }
 var dbg = function () { };
 
 // replace dbg with the real deal here or in the console:
-// dbg = chromedbg
-// dbg = console.log
+// dbg = chromedbg;
+// dbg = console.log;
 
 
 // dodge browser issues
 (function () {
-    var ua = navigator.userAgent;
-    if (ua.indexOf(') Gecko/') !== -1 && /Linux| Mac /.exec(ua)) {
+    if (UA.indexOf(') Gecko/') !== -1 && /Linux| Mac /.exec(UA)) {
         // necessary on ff-68.7 at least
         var s = mknod('style');
         s.innerHTML = '@page { margin: .5in .6in .8in .6in; }';
@@ -202,7 +201,7 @@ function convert_markdown(md_text, dest_dom) {
 
     var marked_opts = {
         //headerPrefix: 'h-',
-        breaks: true,
+        breaks: !md_no_br,
         gfm: true
     };
 
@@ -216,6 +215,11 @@ function convert_markdown(md_text, dest_dom) {
             md_html = DOMPurify.sanitize(md_html);
     }
     catch (ex) {
+        if (IE) {
+            dest_dom.innerHTML = 'IE cannot into markdown ;_;';
+            return false;
+        }
+
         if (ext)
             md_plug_err(ex, ext[1]);
 
@@ -340,6 +344,8 @@ function convert_markdown(md_text, dest_dom) {
             }
             catch (ex) { }
         }, 1);
+    
+    return true;
 }
 
 
@@ -418,7 +424,7 @@ function init_toc() {
         }
     }
 
-    // hilight the correct toc items + scroll into view
+    // highlight the correct toc items + scroll into view
     function freshen_toclist() {
         if (anchors.length == 0)
             return;
@@ -506,13 +512,6 @@ dom_navtgl.onclick = function () {
     swrite('hidenav', hidden ? 1 : 0);
     redraw();
 };
-
-if (!HTTPS && location.hostname != '127.0.0.1') try {
-    ebi('edit2').onclick = function (e) {
-        toast.err(0, "the fancy editor is only available over https");
-        return ev(e);
-    }
-} catch (ex) { }
 
 if (sread('hidenav') == 1)
     dom_navtgl.onclick();

@@ -1,8 +1,10 @@
 # coding: utf-8
 from __future__ import print_function, unicode_literals
 
+import argparse
 import base64
-import contextlib
+import binascii
+import codecs
 import errno
 import hashlib
 import hmac
@@ -25,14 +27,34 @@ import threading
 import time
 import traceback
 from collections import Counter
-from email.utils import formatdate
 
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
 from queue import Queue
 
-from .__init__ import ANYWIN, EXE, MACOS, PY2, TYPE_CHECKING, VT100, WINDOWS
+try:
+    from zlib_ng import gzip_ng as gzip
+    from zlib_ng import zlib_ng as zlib
+
+    sys.modules["gzip"] = gzip
+    # sys.modules["zlib"] = zlib
+    # `- somehow makes tarfile 3% slower with default malloc, and barely faster with mimalloc
+except:
+    import gzip
+    import zlib
+
+from .__init__ import (
+    ANYWIN,
+    EXE,
+    MACOS,
+    PY2,
+    PY36,
+    TYPE_CHECKING,
+    VT100,
+    WINDOWS,
+    EnvParams,
+    unicode,
+)
 from .__version__ import S_BUILD_DT, S_VERSION
-from .stolen import surrogateescape
 
 try:
     from datetime import datetime, timezone
@@ -56,8 +78,15 @@ except:
     UTC = _UTC()
 
 
+if PY2:
+    range = xrange  # type: ignore
+    from .stolen import surrogateescape
+
+    surrogateescape.register_surrogateescape()
+
+
 if sys.version_info >= (3, 7) or (
-    sys.version_info >= (3, 6) and platform.python_implementation() == "CPython"
+    PY36 and platform.python_implementation() == "CPython"
 ):
     ODict = dict
 else:
@@ -79,22 +108,61 @@ def _ens(want: str) -> tuple[int, ...]:
 # WSAENOTSOCK - no longer a socket
 # EUNATCH - can't assign requested address (wifi down)
 E_SCK = _ens("ENOTCONN EUNATCH EBADF WSAENOTSOCK WSAECONNRESET")
+E_SCK_WR = _ens("EPIPE ESHUTDOWN EBADFD")
 E_ADDR_NOT_AVAIL = _ens("EADDRNOTAVAIL WSAEADDRNOTAVAIL")
 E_ADDR_IN_USE = _ens("EADDRINUSE WSAEADDRINUSE")
 E_ACCESS = _ens("EACCES WSAEACCES")
 E_UNREACH = _ens("EHOSTUNREACH WSAEHOSTUNREACH ENETUNREACH WSAENETUNREACH")
+E_FS_MEH = _ens("EPERM EACCES ENOENT ENOTCAPABLE")
+E_FS_CRIT = _ens("EIO EFAULT EUCLEAN ENOTBLK")
 
 IP6ALL = "0:0:0:0:0:0:0:0"
+IP6_LL = ("fe8", "fe9", "fea", "feb")
+IP64_LL = ("fe8", "fe9", "fea", "feb", "169.254")
 
+UC_CDISP = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._"
+BC_CDISP = UC_CDISP.encode("ascii")
+UC_CDISP_SET = set(UC_CDISP)
+BC_CDISP_SET = set(BC_CDISP)
+
+try:
+    import fcntl
+
+    HAVE_FCNTL = True
+    HAVE_FICLONE = hasattr(fcntl, "FICLONE")
+except:
+    HAVE_FCNTL = False
+    HAVE_FICLONE = False
 
 try:
     import ctypes
-    import fcntl
     import termios
 except:
     pass
 
 try:
+    if os.environ.get("PRTY_NO_IFADDR"):
+        raise Exception()
+    try:
+        if os.getenv("PRTY_SYS_ALL") or os.getenv("PRTY_SYS_IFADDR"):
+            raise ImportError()
+
+        from .stolen.ifaddr import get_adapters
+    except ImportError:
+        from ifaddr import get_adapters
+
+    HAVE_IFADDR = True
+except:
+    HAVE_IFADDR = False
+
+    def get_adapters(include_unconfigured=False):
+        return []
+
+
+try:
+    if os.environ.get("PRTY_NO_SQLITE"):
+        raise Exception()
+
     HAVE_SQLITE3 = True
     import sqlite3
 
@@ -103,17 +171,42 @@ except:
     HAVE_SQLITE3 = False
 
 try:
+    import importlib.util
+
+    HAVE_ZMQ = bool(importlib.util.find_spec("zmq"))
+except:
+    HAVE_ZMQ = False
+
+try:
+    if os.environ.get("PRTY_NO_PSUTIL"):
+        raise Exception()
+
     HAVE_PSUTIL = True
     import psutil
 except:
     HAVE_PSUTIL = False
+
+try:
+    if os.environ.get("PRTY_NO_MAGIC") or (
+        ANYWIN and not os.environ.get("PRTY_FORCE_MAGIC")
+    ):
+        raise Exception()
+
+    import magic
+except:
+    pass
+
+if os.getenv("PRTY_MODSPEC"):
+    from inspect import getsourcefile
+
+    print("PRTY_MODSPEC: ifaddr:", getsourcefile(get_adapters))
 
 if True:  # pylint: disable=using-constant-test
     import types
     from collections.abc import Callable, Iterable
 
     import typing
-    from typing import Any, Generator, Optional, Pattern, Protocol, Union
+    from typing import IO, Any, Generator, Optional, Pattern, Protocol, Union
 
     try:
         from typing import LiteralString
@@ -130,13 +223,16 @@ if True:  # pylint: disable=using-constant-test
 
 
 if TYPE_CHECKING:
-    import magic
-
     from .authsrv import VFS
+    from .broker_util import BrokerCli
+    from .up2k import Up2k
 
 FAKE_MP = False
 
 try:
+    if os.environ.get("PRTY_NO_MP"):
+        raise ImportError()
+
     import multiprocessing as mp
 
     # import multiprocessing.dummy as mp
@@ -146,12 +242,23 @@ except ImportError:
 
 if not PY2:
     from io import BytesIO
-    from urllib.parse import quote_from_bytes as quote
-    from urllib.parse import unquote_to_bytes as unquote
 else:
     from StringIO import StringIO as BytesIO  # type: ignore
-    from urllib import quote  # type: ignore # pylint: disable=no-name-in-module
-    from urllib import unquote  # type: ignore # pylint: disable=no-name-in-module
+
+
+try:
+    if os.environ.get("PRTY_NO_IPV6"):
+        raise Exception()
+
+    socket.inet_pton(socket.AF_INET6, "::1")
+    HAVE_IPV6 = True
+except:
+
+    def inet_pton(fam, ip):
+        return socket.inet_aton(ip)
+
+    socket.inet_pton = inet_pton
+    HAVE_IPV6 = False
 
 
 try:
@@ -167,25 +274,52 @@ except:
         return struct.unpack(fmt.decode("ascii"), a)
 
 
-ansi_re = re.compile("\033\\[[^mK]*[mK]")
+try:
+    BITNESS = struct.calcsize(b"P") * 8
+except:
+    BITNESS = struct.calcsize("P") * 8
 
 
-surrogateescape.register_surrogateescape()
+RE_ANSI = re.compile("\033\\[[^mK]*[mK]")
+RE_HTML_SH = re.compile(r"[<>&$?`\"';]")
+RE_CTYPE = re.compile(r"^content-type: *([^; ]+)", re.IGNORECASE)
+RE_CDISP = re.compile(r"^content-disposition: *([^; ]+)", re.IGNORECASE)
+RE_CDISP_FIELD = re.compile(
+    r'^content-disposition:(?: *|.*; *)name="([^"]+)"', re.IGNORECASE
+)
+RE_CDISP_FILE = re.compile(
+    r'^content-disposition:(?: *|.*; *)filename="(.*)"', re.IGNORECASE
+)
+RE_MEMTOTAL = re.compile("^MemTotal:.* kB")
+RE_MEMAVAIL = re.compile("^MemAvailable:.* kB")
+
+
+BOS_SEP = ("%s" % (os.sep,)).encode("ascii")
+
+
 if WINDOWS and PY2:
     FS_ENCODING = "utf-8"
 else:
     FS_ENCODING = sys.getfilesystemencoding()
 
 
-SYMTIME = sys.version_info > (3, 6) and os.utime in os.supports_follow_symlinks
+SYMTIME = PY36 and os.utime in os.supports_follow_symlinks
 
-META_NOBOTS = '<meta name="robots" content="noindex, nofollow">'
+META_NOBOTS = '<meta name="robots" content="noindex, nofollow">\n'
+
+# smart enough to understand javascript while also ignoring rel="nofollow"
+BAD_BOTS = r"Barkrowler|bingbot|BLEXBot|Googlebot|GoogleOther|GPTBot|PetalBot|SeekportBot|SemrushBot|YandexBot"
 
 FFMPEG_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-git-full.7z"
+
+URL_PRJ = "https://github.com/9001/copyparty"
+
+URL_BUG = URL_PRJ + "/issues/new?labels=bug&template=bug_report.md"
 
 HTTPCODE = {
     200: "OK",
     201: "Created",
+    202: "Accepted",
     204: "No Content",
     206: "Partial Content",
     207: "Multi-Status",
@@ -221,6 +355,11 @@ IMPLICATIONS = [
     ["e2vu", "e2v"],
     ["e2vp", "e2v"],
     ["e2v", "e2d"],
+    ["hardlink_only", "hardlink"],
+    ["hardlink", "dedup"],
+    ["tftpvv", "tftpv"],
+    ["nodupem", "nodupe"],
+    ["no_dupe_m", "no_dupe"],
     ["smbw", "smb"],
     ["smb1", "smb"],
     ["smbvvv", "smbvv"],
@@ -244,8 +383,40 @@ if ANYWIN:
 UNPLICATIONS = [["no_dav", "daw"]]
 
 
+DAV_ALLPROP_L = [
+    "contentclass",
+    "creationdate",
+    "defaultdocument",
+    "displayname",
+    "getcontentlanguage",
+    "getcontentlength",
+    "getcontenttype",
+    "getlastmodified",
+    "href",
+    "iscollection",
+    "ishidden",
+    "isreadonly",
+    "isroot",
+    "isstructureddocument",
+    "lastaccessed",
+    "name",
+    "parentname",
+    "resourcetype",
+    "supportedlock",
+]
+DAV_ALLPROPS = set(DAV_ALLPROP_L)
+
+
+FAVICON_MIMES = {
+    "gif": "image/gif",
+    "png": "image/png",
+    "svg": "image/svg+xml",
+}
+
+
 MIMES = {
     "opus": "audio/ogg; codecs=opus",
+    "owa": "audio/webm; codecs=opus",
 }
 
 
@@ -273,6 +444,9 @@ application swf=x-shockwave-flash m3u=vnd.apple.mpegurl db3=vnd.sqlite3 sqlite=v
 text ass=plain ssa=plain
 image jpg=jpeg xpm=x-xpixmap psd=vnd.adobe.photoshop jpf=jpx tif=tiff ico=x-icon djvu=vnd.djvu
 image heic=heic-sequence heif=heif-sequence hdr=vnd.radiance svg=svg+xml
+image arw=x-sony-arw cr2=x-canon-cr2 crw=x-canon-crw dcr=x-kodak-dcr dng=x-adobe-dng erf=x-epson-erf
+image k25=x-kodak-k25 kdc=x-kodak-kdc mrw=x-minolta-mrw nef=x-nikon-nef orf=x-olympus-orf
+image pef=x-pentax-pef raf=x-fuji-raf raw=x-panasonic-raw sr2=x-sony-sr2 srf=x-sony-srf x3f=x-sigma-x3f
 audio caf=x-caf mp3=mpeg m4a=mp4 mid=midi mpc=musepack aif=aiff au=basic qcp=qcelp
 video mkv=x-matroska mov=quicktime avi=x-msvideo m4v=x-m4v ts=mp2t
 video asf=x-ms-asf flv=x-flv 3gp=3gpp 3g2=3gpp2 rmvb=vnd.rn-realmedia-vbr
@@ -294,9 +468,9 @@ EXTS["vnd.mozilla.apng"] = "png"
 MAGIC_MAP = {"jpeg": "jpg"}
 
 
-DEF_EXP = "self.ip self.ua self.uname self.host cfg.name cfg.logout vf.scan vf.thsize hdr.cf_ipcountry srv.itime srv.htime"
+DEF_EXP = "self.ip self.ua self.uname self.host cfg.name cfg.logout vf.scan vf.thsize hdr.cf-ipcountry srv.itime srv.htime"
 
-DEF_MTE = "circle,album,.tn,artist,title,.bpm,key,.dur,.q,.vq,.aq,vc,ac,fmt,res,.fps,ahash,vhash"
+DEF_MTE = ".files,circle,album,.tn,artist,title,.bpm,key,.dur,.q,.vq,.aq,vc,ac,fmt,res,.fps,ahash,vhash"
 
 DEF_MTH = ".vq,.aq,vc,ac,fmt,res,.fps"
 
@@ -343,6 +517,51 @@ CMD_EXEB = set(_exestr.encode("utf-8").split())
 CMD_EXES = set(_exestr.split())
 
 
+# mostly from https://github.com/github/gitignore/blob/main/Global/macOS.gitignore
+APPLESAN_TXT = r"/(__MACOS|Icon\r\r)|/\.(_|DS_Store|AppleDouble|LSOverride|DocumentRevisions-|fseventsd|Spotlight-|TemporaryItems|Trashes|VolumeIcon\.icns|com\.apple\.timemachine\.donotpresent|AppleDB|AppleDesktop|apdisk)"
+APPLESAN_RE = re.compile(APPLESAN_TXT)
+
+
+HUMANSIZE_UNITS = ("B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB")
+
+UNHUMANIZE_UNITS = {
+    "b": 1,
+    "k": 1024,
+    "m": 1024 * 1024,
+    "g": 1024 * 1024 * 1024,
+    "t": 1024 * 1024 * 1024 * 1024,
+    "p": 1024 * 1024 * 1024 * 1024 * 1024,
+    "e": 1024 * 1024 * 1024 * 1024 * 1024 * 1024,
+}
+
+VF_CAREFUL = {"mv_re_t": 5, "rm_re_t": 5, "mv_re_r": 0.1, "rm_re_r": 0.1}
+
+FN_EMB = set([".prologue.html", ".epilogue.html", "readme.md", "preadme.md"])
+
+
+def read_ram() -> tuple[float, float]:
+    # NOTE: apparently no need to consider /sys/fs/cgroup/memory.max
+    #  (cgroups2) since the limit is synced to /proc/meminfo
+    a = b = 0
+    try:
+        with open("/proc/meminfo", "rb", 0x10000) as f:
+            zsl = f.read(0x10000).decode("ascii", "replace").split("\n")
+
+        p = RE_MEMTOTAL
+        zs = next((x for x in zsl if p.match(x)))
+        a = int((int(zs.split()[1]) / 0x100000) * 100) / 100
+
+        p = RE_MEMAVAIL
+        zs = next((x for x in zsl if p.match(x)))
+        b = int((int(zs.split()[1]) / 0x100000) * 100) / 100
+    except:
+        pass
+    return a, b
+
+
+RAM_TOTAL, RAM_AVAIL = read_ram()
+
+
 pybin = sys.executable or ""
 if EXE:
     pybin = ""
@@ -365,11 +584,8 @@ def py_desc() -> str:
     ofs = py_ver.find(".final.")
     if ofs > 0:
         py_ver = py_ver[:ofs]
-
-    try:
-        bitness = struct.calcsize(b"P") * 8
-    except:
-        bitness = struct.calcsize("P") * 8
+    if "free-threading" in sys.version:
+        py_ver += "t"
 
     host_os = platform.system()
     compiler = platform.python_compiler().split("http")[0]
@@ -378,12 +594,21 @@ def py_desc() -> str:
     os_ver = m.group(1) if m else ""
 
     return "{:>9} v{} on {}{} {} [{}]".format(
-        interp, py_ver, host_os, bitness, os_ver, compiler
+        interp, py_ver, host_os, BITNESS, os_ver, compiler
     )
 
 
+def expat_ver() -> str:
+    try:
+        import pyexpat
+
+        return ".".join([str(x) for x in pyexpat.version_info])
+    except:
+        return "?"
+
+
 def _sqlite_ver() -> str:
-    assert sqlite3  # type: ignore
+    assert sqlite3  # type: ignore  # !rm
     try:
         co = sqlite3.connect(":memory:")
         cur = co.cursor()
@@ -416,14 +641,86 @@ try:
 except:
     PYFTPD_VER = "(None)"
 
+try:
+    from partftpy.__init__ import __version__ as PARTFTPY_VER
+except:
+    PARTFTPY_VER = "(None)"
 
-VERSIONS = "copyparty v{} ({})\n{}\n   sqlite v{} | jinja v{} | pyftpd v{}".format(
-    S_VERSION, S_BUILD_DT, py_desc(), SQLITE_VER, JINJA_VER, PYFTPD_VER
+
+PY_DESC = py_desc()
+
+VERSIONS = (
+    "copyparty v{} ({})\n{}\n   sqlite {} | jinja {} | pyftpd {} | tftp {}".format(
+        S_VERSION, S_BUILD_DT, PY_DESC, SQLITE_VER, JINJA_VER, PYFTPD_VER, PARTFTPY_VER
+    )
 )
 
 
-_: Any = (mp, BytesIO, quote, unquote, SQLITE_VER, JINJA_VER, PYFTPD_VER)
-__all__ = ["mp", "BytesIO", "quote", "unquote", "SQLITE_VER", "JINJA_VER", "PYFTPD_VER"]
+try:
+    _b64_enc_tl = bytes.maketrans(b"+/", b"-_")
+    _b64_dec_tl = bytes.maketrans(b"-_", b"+/")
+
+    def ub64enc(bs: bytes) -> bytes:
+        x = binascii.b2a_base64(bs, newline=False)
+        return x.translate(_b64_enc_tl)
+
+    def ub64dec(bs: bytes) -> bytes:
+        bs = bs.translate(_b64_dec_tl)
+        return binascii.a2b_base64(bs)
+
+    def b64enc(bs: bytes) -> bytes:
+        return binascii.b2a_base64(bs, newline=False)
+
+    def b64dec(bs: bytes) -> bytes:
+        return binascii.a2b_base64(bs)
+
+    zb = b">>>????"
+    zb2 = base64.urlsafe_b64encode(zb)
+    if zb2 != ub64enc(zb) or zb != ub64dec(zb2):
+        raise Exception("bad smoke")
+
+except Exception as ex:
+    ub64enc = base64.urlsafe_b64encode  # type: ignore
+    ub64dec = base64.urlsafe_b64decode  # type: ignore
+    b64enc = base64.b64encode  # type: ignore
+    b64dec = base64.b64decode  # type: ignore
+    if not PY36:
+        print("using fallback base64 codec due to %r" % (ex,))
+
+
+class NotUTF8(Exception):
+    pass
+
+
+def read_utf8(log: Optional["NamedLogger"], ap: Union[str, bytes], strict: bool) -> str:
+    with open(ap, "rb") as f:
+        buf = f.read()
+
+    if buf.startswith(b"\xef\xbb\xbf"):
+        buf = buf[3:]
+
+    try:
+        return buf.decode("utf-8", "strict")
+    except UnicodeDecodeError as ex:
+        eo = ex.start
+        eb = buf[eo : eo + 1]
+
+    if not strict:
+        t = "WARNING: The file [%s] is not using the UTF-8 character encoding; some characters in the file will be skipped/ignored. The first unreadable character was byte %r at offset %d. Please convert this file to UTF-8 by opening the file in your text-editor and saving it as UTF-8."
+        t = t % (ap, eb, eo)
+        if log:
+            log(t, 3)
+        else:
+            print(t)
+        return buf.decode("utf-8", "replace")
+
+    t = "ERROR: The file [%s] is not using the UTF-8 character encoding, and cannot be loaded. The first unreadable character was byte %r at offset %d. Please convert this file to UTF-8 by opening the file in your text-editor and saving it as UTF-8."
+    t = t % (ap, eb, eo)
+    if log:
+        log(t, 3)
+    else:
+        print(t)
+    raise NotUTF8(t)
 
 
 class Daemon(threading.Thread):
@@ -435,12 +732,21 @@ class Daemon(threading.Thread):
         r: bool = True,
         ka: Optional[dict[Any, Any]] = None,
     ) -> None:
-        threading.Thread.__init__(
-            self, target=target, name=name, args=a or (), kwargs=ka
-        )
+        threading.Thread.__init__(self, name=name)
+        self.a = a or ()
+        self.ka = ka or {}
+        self.fun = target
         self.daemon = True
         if r:
             self.start()
+
+    def run(self):
+        if not ANYWIN and not PY2:
+            signal.pthread_sigmask(
+                signal.SIG_BLOCK, [signal.SIGINT, signal.SIGTERM, signal.SIGUSR1]
+            )
+
+        self.fun(*self.a, **self.ka)
 
 
 class Netdev(object):
@@ -527,25 +833,44 @@ class HLog(logging.Handler):
         elif record.name.startswith("impacket"):
             if self.ptn_smb_ign.match(msg):
                 return
+        elif record.name.startswith("partftpy."):
+            record.name = record.name[9:]
 
         self.log_func(record.name[-21:], msg, c)
 
 
 class NetMap(object):
-    def __init__(self, ips: list[str], netdevs: dict[str, Netdev]) -> None:
+    def __init__(
+        self,
+        ips: list[str],
+        cidrs: list[str],
+        keep_lo=False,
+        strict_cidr=False,
+        defer_mutex=False,
+    ) -> None:
+        """
+        ips: list of plain ipv4/ipv6 IPs, not cidr
+        cidrs: list of cidr-notation IPs (ip/prefix)
+        """
+
+        # fails multiprocessing; defer assignment
+        self.mutex: Optional[threading.Lock] = None if defer_mutex else threading.Lock()
+
         if "::" in ips:
             ips = [x for x in ips if x != "::"] + list(
-                [x.split("/")[0] for x in netdevs if ":" in x]
+                [x.split("/")[0] for x in cidrs if ":" in x]
             )
             ips.append("0.0.0.0")
 
         if "0.0.0.0" in ips:
             ips = [x for x in ips if x != "0.0.0.0"] + list(
-                [x.split("/")[0] for x in netdevs if ":" not in x]
+                [x.split("/")[0] for x in cidrs if ":" not in x]
             )
 
-        ips = [x for x in ips if x not in ("::1", "127.0.0.1")]
-        ips = find_prefix(ips, netdevs)
+        if not keep_lo:
+            ips = [x for x in ips if x not in ("::1", "127.0.0.1")]
+
+        ips = find_prefix(ips, cidrs)
 
         self.cache: dict[str, str] = {}
         self.b2sip: dict[bytes, str] = {}
@@ -557,16 +882,24 @@ class NetMap(object):
             bip = socket.inet_pton(fam, ip.split("/")[0])
             self.bip.append(bip)
             self.b2sip[bip] = ip.split("/")[0]
-            self.b2net[bip] = (IPv6Network if v6 else IPv4Network)(ip, False)
+            self.b2net[bip] = (IPv6Network if v6 else IPv4Network)(ip, strict_cidr)
 
         self.bip.sort(reverse=True)
 
     def map(self, ip: str) -> str:
+        if ip.startswith("::ffff:"):
+            ip = ip[7:]
+
         try:
             return self.cache[ip]
         except:
-            pass
+            # intentionally crash the calling thread if unset:
+            assert self.mutex  # type: ignore  # !rm
 
+            with self.mutex:
+                return self._map(ip)
+
+    def _map(self, ip: str) -> str:
         v6 = ":" in ip
         ci = IPv6Address(ip) if v6 else IPv4Address(ip)
         bip = next((x for x in self.bip if ci in self.b2net[x]), None)
@@ -643,6 +976,7 @@ class _Unrecv(object):
         self.buf = buf + self.buf
 
 
+# !rm.yes>
 class _LUnrecv(object):
     """
     with expensive debug logging
@@ -699,6 +1033,9 @@ class _LUnrecv(object):
         print(t.format(buf, self.buf))
 
 
+# !rm.no>
+
+
 Unrecv = _Unrecv
 
 
@@ -718,9 +1055,39 @@ class CachedSet(object):
 
         c = self.c = {k: v for k, v in self.c.items() if now - v < self.maxage}
         try:
-            self.oldest = c[min(c, key=c.get)]
+            self.oldest = c[min(c, key=c.get)]  # type: ignore
         except:
             self.oldest = now
+
+
+class CachedDict(object):
+    def __init__(self, maxage: float) -> None:
+        self.c: dict[str, tuple[float, Any]] = {}
+        self.maxage = maxage
+        self.oldest = 0.0
+
+    def set(self, k: str, v: Any) -> None:
+        now = time.time()
+        self.c[k] = (now, v)
+        if now - self.oldest < self.maxage:
+            return
+
+        c = self.c = {k: v for k, v in self.c.items() if now - v[0] < self.maxage}
+        try:
+            self.oldest = min([x[0] for x in c.values()])
+        except:
+            self.oldest = now
+
+    def get(self, k: str) -> Optional[tuple[str, Any]]:
+        try:
+            ts, ret = self.c[k]
+            now = time.time()
+            if now - ts > self.maxage:
+                del self.c[k]
+                return None
+            return ret
+        except:
+            return None
 
 
 class FHC(object):
@@ -728,10 +1095,11 @@ class FHC(object):
         def __init__(self, fh: typing.BinaryIO) -> None:
             self.ts: float = 0
             self.fhs = [fh]
+            self.all_fhs = set([fh])
 
     def __init__(self) -> None:
         self.cache: dict[str, FHC.CE] = {}
-        self.aps: set[str] = set()
+        self.aps: dict[str, int] = {}
 
     def close(self, path: str) -> None:
         try:
@@ -743,7 +1111,7 @@ class FHC(object):
             fh.close()
 
         del self.cache[path]
-        self.aps.remove(path)
+        del self.aps[path]
 
     def clean(self) -> None:
         if not self.cache:
@@ -764,9 +1132,12 @@ class FHC(object):
         return self.cache[path].fhs.pop()
 
     def put(self, path: str, fh: typing.BinaryIO) -> None:
-        self.aps.add(path)
+        if path not in self.aps:
+            self.aps[path] = 0
+
         try:
             ce = self.cache[path]
+            ce.all_fhs.add(fh)
             ce.fhs.append(fh)
         except:
             ce = self.CE(fh)
@@ -780,26 +1151,43 @@ class ProgressPrinter(threading.Thread):
     periodically print progress info without linefeeds
     """
 
-    def __init__(self) -> None:
+    def __init__(self, log: "NamedLogger", args: argparse.Namespace) -> None:
         threading.Thread.__init__(self, name="pp")
         self.daemon = True
+        self.log = log
+        self.args = args
         self.msg = ""
         self.end = False
         self.n = -1
-        self.start()
 
     def run(self) -> None:
+        sigblock()
+        tp = 0
         msg = None
+        slp_pr = self.args.scan_pr_r
+        slp_ps = min(slp_pr, self.args.scan_st_r)
+        no_stdout = self.args.q or slp_pr == slp_ps
         fmt = " {}\033[K\r" if VT100 else " {} $\r"
         while not self.end:
-            time.sleep(0.1)
+            time.sleep(slp_ps)
             if msg == self.msg or self.end:
                 continue
 
             msg = self.msg
+            now = time.time()
+            if msg and now - tp >= slp_pr:
+                tp = now
+                self.log("progress: %r" % (msg,), 6)
+
+            if no_stdout:
+                continue
+
             uprint(fmt.format(msg))
             if PY2:
                 sys.stdout.flush()
+
+        if no_stdout:
+            return
 
         if VT100:
             print("\033[K", end="")
@@ -816,6 +1204,7 @@ class MTHash(object):
         self.sz = 0
         self.csz = 0
         self.stop = False
+        self.readsz = 1024 * 1024 * (2 if (RAM_AVAIL or 2) < 1 else 12)
         self.omutex = threading.Lock()
         self.imutex = threading.Lock()
         self.work_q: Queue[int] = Queue()
@@ -844,21 +1233,21 @@ class MTHash(object):
             for nch in range(nchunks):
                 self.work_q.put(nch)
 
-            ex = ""
+            ex: Optional[Exception] = None
             for nch in range(nchunks):
                 qe = self.done_q.get()
                 try:
                     nch, dig, ofs, csz = qe
                     chunks[nch] = (dig, ofs, csz)
                 except:
-                    ex = ex or str(qe)
+                    ex = ex or qe  # type: ignore
 
                 if pp:
                     mb = (fsz - nch * chunksz) // (1024 * 1024)
                     pp.msg = prefix + str(mb) + suffix
 
             if ex:
-                raise Exception(ex)
+                raise ex
 
             ret = []
             for n in range(nchunks):
@@ -875,7 +1264,7 @@ class MTHash(object):
             try:
                 v = self.hash_at(ofs)
             except Exception as ex:
-                v = str(ex)  # type: ignore
+                v = ex  # type: ignore
 
             self.done_q.put(v)
 
@@ -886,12 +1275,12 @@ class MTHash(object):
         if self.stop:
             return nch, "", ofs0, chunk_sz
 
-        assert f
+        assert f  # !rm
         hashobj = hashlib.sha512()
         while chunk_rem > 0:
             with self.imutex:
                 f.seek(ofs)
-                buf = f.read(min(chunk_rem, 1024 * 1024 * 12))
+                buf = f.read(min(chunk_rem, self.readsz))
 
             if not buf:
                 raise Exception("EOF at " + str(ofs))
@@ -901,7 +1290,7 @@ class MTHash(object):
             ofs += len(buf)
 
         bdig = hashobj.digest()[:33]
-        udig = base64.urlsafe_b64encode(bdig).decode("utf-8")
+        udig = ub64enc(bdig).decode("ascii")
         return nch, udig, ofs0, chunk_sz
 
 
@@ -927,7 +1316,7 @@ class HMaccas(object):
                 self.cache = {}
 
             zb = hmac.new(self.key, msg, hashlib.sha512).digest()
-            zs = base64.urlsafe_b64encode(zb)[: self.retlen].decode("utf-8")
+            zs = ub64enc(zb)[: self.retlen].decode("ascii")
             self.cache[msg] = zs
             return zs
 
@@ -942,8 +1331,6 @@ class Magician(object):
         self.magic: Optional["magic.Magic"] = None
 
     def ext(self, fpath: str) -> str:
-        import magic
-
         try:
             if self.bad_magic:
                 raise Exception()
@@ -968,7 +1355,7 @@ class Magician(object):
             return ret
 
         mime = magic.from_file(fpath, mime=True)
-        mime = re.split("[; ]", mime, 1)[0]
+        mime = re.split("[; ]", mime, maxsplit=1)[0]
         try:
             return EXTS[mime]
         except:
@@ -1115,20 +1502,24 @@ def trace(*args: Any, **kwargs: Any) -> None:
     nuprint(msg)
 
 
-def alltrace() -> str:
+def alltrace(verbose: bool = True) -> str:
     threads: dict[str, types.FrameType] = {}
     names = dict([(t.ident, t.name) for t in threading.enumerate()])
     for tid, stack in sys._current_frames().items():
-        name = "%s (%x)" % (names.get(tid), tid)
+        if verbose:
+            name = "%s (%x)" % (names.get(tid), tid)
+        else:
+            name = str(names.get(tid))
         threads[name] = stack
 
     rret: list[str] = []
     bret: list[str] = []
+    np = -3 if verbose else -2
     for name, stack in sorted(threads.items()):
         ret = ["\n\n# %s" % (name,)]
         pad = None
         for fn, lno, name, line in traceback.extract_stack(stack):
-            fn = os.sep.join(fn.split(os.sep)[-3:])
+            fn = os.sep.join(fn.split(os.sep)[np:])
             ret.append('File: "%s", line %d, in %s' % (fn, lno, name))
             if line:
                 ret.append("  " + str(line.strip()))
@@ -1161,8 +1552,6 @@ def stackmon(fp: str, ival: float, suffix: str) -> None:
         buf = st.encode("utf-8", "replace")
 
         if fp.endswith(".gz"):
-            import gzip
-
             # 2459b 2304b 2241b 2202b 2194b 2191b lv3..8
             # 0.06s 0.08s 0.11s 0.13s 0.16s 0.19s
             buf = gzip.compress(buf, compresslevel=6)
@@ -1220,38 +1609,61 @@ def log_thrs(log: Callable[[str, str, int], None], ival: float, name: str) -> No
         log(name, "\033[0m \033[33m".join(tv), 3)
 
 
+def sigblock():
+    if ANYWIN or PY2:
+        return
+
+    signal.pthread_sigmask(
+        signal.SIG_BLOCK, [signal.SIGINT, signal.SIGTERM, signal.SIGUSR1]
+    )
+
+
 def vol_san(vols: list["VFS"], txt: bytes) -> bytes:
+    txt0 = txt
     for vol in vols:
-        txt = txt.replace(vol.realpath.encode("utf-8"), vol.vpath.encode("utf-8"))
-        txt = txt.replace(
-            vol.realpath.encode("utf-8").replace(b"\\", b"\\\\"),
-            vol.vpath.encode("utf-8"),
-        )
+        bap = vol.realpath.encode("utf-8")
+        bhp = vol.histpath.encode("utf-8")
+        bvp = vol.vpath.encode("utf-8")
+        bvph = b"$hist(/" + bvp + b")"
+
+        if bap:
+            txt = txt.replace(bap, bvp)
+            txt = txt.replace(bap.replace(b"\\", b"\\\\"), bvp)
+        if bhp:
+            txt = txt.replace(bhp, bvph)
+            txt = txt.replace(bhp.replace(b"\\", b"\\\\"), bvph)
+
+        if vol.histpath != vol.dbpath:
+            bdp = vol.dbpath.encode("utf-8")
+            bdph = b"$db(/" + bvp + b")"
+            txt = txt.replace(bdp, bdph)
+            txt = txt.replace(bdp.replace(b"\\", b"\\\\"), bdph)
+
+    if txt != txt0:
+        txt += b"\r\nNOTE: filepaths sanitized; see serverlog for correct values"
 
     return txt
 
 
 def min_ex(max_lines: int = 8, reverse: bool = False) -> str:
     et, ev, tb = sys.exc_info()
-    stb = traceback.extract_tb(tb)
-    fmt = "%s @ %d <%s>: %s"
+    stb = traceback.extract_tb(tb) if tb else traceback.extract_stack()[:-1]
+    fmt = "%s:%d <%s>: %s"
     ex = [fmt % (fp.split(os.sep)[-1], ln, fun, txt) for fp, ln, fun, txt in stb]
-    ex.append("[%s] %s" % (et.__name__ if et else "(anonymous)", ev))
+    if et or ev or tb:
+        ex.append("[%s] %s" % (et.__name__ if et else "(anonymous)", ev))
     return "\n".join(ex[-max_lines:][:: -1 if reverse else 1])
 
 
-@contextlib.contextmanager
-def ren_open(
-    fname: str, *args: Any, **kwargs: Any
-) -> Generator[dict[str, tuple[typing.IO[Any], str]], None, None]:
+def ren_open(fname: str, *args: Any, **kwargs: Any) -> tuple[typing.IO[Any], str]:
     fun = kwargs.pop("fun", open)
     fdir = kwargs.pop("fdir", None)
     suffix = kwargs.pop("suffix", None)
+    vf = kwargs.pop("vf", None)
+    fperms = vf and "fperms" in vf
 
     if fname == os.devnull:
-        with fun(fname, *args, **kwargs) as f:
-            yield {"orz": (f, fname)}
-            return
+        return fun(fname, *args, **kwargs), fname
 
     if suffix:
         ext = fname.split(".")[-1]
@@ -1273,6 +1685,7 @@ def ren_open(
     asciified = False
     b64 = ""
     while True:
+        f = None
         try:
             if fdir:
                 fpath = os.path.join(fdir, fname)
@@ -1284,19 +1697,25 @@ def ren_open(
                 fname += suffix
                 ext += suffix
 
-            with fun(fsenc(fpath), *args, **kwargs) as f:
-                if b64:
-                    assert fdir
-                    fp2 = "fn-trunc.%s.txt" % (b64,)
-                    fp2 = os.path.join(fdir, fp2)
-                    with open(fsenc(fp2), "wb") as f2:
-                        f2.write(orig_name.encode("utf-8"))
+            f = fun(fsenc(fpath), *args, **kwargs)
+            if b64:
+                assert fdir  # !rm
+                fp2 = "fn-trunc.%s.txt" % (b64,)
+                fp2 = os.path.join(fdir, fp2)
+                with open(fsenc(fp2), "wb") as f2:
+                    f2.write(orig_name.encode("utf-8"))
+                    if fperms:
+                        set_fperms(f2, vf)
 
-                yield {"orz": (f, fname)}
-                return
+            if fperms:
+                set_fperms(f, vf)
+
+            return f, fname
 
         except OSError as ex_:
             ex = ex_
+            if f:
+                f.close()
 
             # EPERM: android13
             if ex.errno in (errno.EINVAL, errno.EPERM) and not asciified:
@@ -1317,8 +1736,7 @@ def ren_open(
 
         if not b64:
             zs = ("%s\n%s" % (orig_name, suffix)).encode("utf-8", "replace")
-            zs = hashlib.sha512(zs).digest()[:12]
-            b64 = base64.urlsafe_b64encode(zs).decode("utf-8")
+            b64 = ub64enc(hashlib.sha512(zs).digest()[:12]).decode("ascii")
 
         badlen = len(fname)
         while len(fname) >= badlen:
@@ -1341,20 +1759,21 @@ def ren_open(
 
 class MultipartParser(object):
     def __init__(
-        self, log_func: "NamedLogger", sr: Unrecv, http_headers: dict[str, str]
+        self,
+        log_func: "NamedLogger",
+        args: argparse.Namespace,
+        sr: Unrecv,
+        http_headers: dict[str, str],
     ):
         self.sr = sr
         self.log = log_func
+        self.args = args
         self.headers = http_headers
 
-        self.re_ctype = re.compile(r"^content-type: *([^; ]+)", re.IGNORECASE)
-        self.re_cdisp = re.compile(r"^content-disposition: *([^; ]+)", re.IGNORECASE)
-        self.re_cdisp_field = re.compile(
-            r'^content-disposition:(?: *|.*; *)name="([^"]+)"', re.IGNORECASE
-        )
-        self.re_cdisp_file = re.compile(
-            r'^content-disposition:(?: *|.*; *)filename="(.*)"', re.IGNORECASE
-        )
+        self.re_ctype = RE_CTYPE
+        self.re_cdisp = RE_CDISP
+        self.re_cdisp_field = RE_CDISP_FIELD
+        self.re_cdisp_file = RE_CDISP_FILE
 
         self.boundary = b""
         self.gen: Optional[
@@ -1371,7 +1790,7 @@ class MultipartParser(object):
         (only the fallback non-js uploader relies on these filenames)
         """
         for ln in read_header(self.sr, 2, 2592000):
-            self.log(ln)
+            self.log(repr(ln))
 
             m = self.re_ctype.match(ln)
             if m:
@@ -1391,12 +1810,12 @@ class MultipartParser(object):
                 continue
 
             if m.group(1).lower() != "form-data":
-                raise Pebkac(400, "not form-data: {}".format(ln))
+                raise Pebkac(400, "not form-data: %r" % (ln,))
 
             try:
                 field = self.re_cdisp_field.match(ln).group(1)  # type: ignore
             except:
-                raise Pebkac(400, "missing field name: {}".format(ln))
+                raise Pebkac(400, "missing field name: %r" % (ln,))
 
             try:
                 fn = self.re_cdisp_file.match(ln).group(1)  # type: ignore
@@ -1443,7 +1862,7 @@ class MultipartParser(object):
 
     def _read_data(self) -> Generator[bytes, None, None]:
         blen = len(self.boundary)
-        bufsz = 32 * 1024
+        bufsz = self.args.s_rd_sz
         while True:
             try:
                 buf = self.sr.recv(bufsz)
@@ -1546,7 +1965,7 @@ class MultipartParser(object):
         returns the value of the next field in the multipart body,
         raises if the field name is not as expected
         """
-        assert self.gen
+        assert self.gen  # !rm
         p_field, p_fname, p_data = next(self.gen)
         if p_field != field_name:
             raise WrongPostKey(field_name, p_field, p_fname, p_data)
@@ -1555,7 +1974,7 @@ class MultipartParser(object):
 
     def drop(self) -> None:
         """discards the remaining multipart body"""
-        assert self.gen
+        assert self.gen  # !rm
         for _, _, data in self.gen:
             for _ in data:
                 pass
@@ -1568,7 +1987,7 @@ def get_boundary(headers: dict[str, str]) -> str:
     ct = headers["content-type"]
     m = re.match(ptn, ct, re.IGNORECASE)
     if not m:
-        raise Pebkac(400, "invalid content-type for a multipart post: {}".format(ct))
+        raise Pebkac(400, "invalid content-type for a multipart post: %r" % (ct,))
 
     return m.group(2)
 
@@ -1594,7 +2013,7 @@ def read_header(sr: Unrecv, t_idle: int, t_tot: int) -> list[str]:
 
         ofs = ret.find(b"\r\n\r\n")
         if ofs < 0:
-            if len(ret) > 1024 * 64:
+            if len(ret) > 1024 * 32:
                 raise Pebkac(400, "header 2big")
             else:
                 continue
@@ -1619,22 +2038,28 @@ def rand_name(fdir: str, fn: str, rnd: int) -> str:
 
             nc = rnd + extra
             nb = (6 + 6 * nc) // 8
-            zb = os.urandom(nb)
-            zb = base64.urlsafe_b64encode(zb)
-            fn = zb[:nc].decode("utf-8") + ext
+            zb = ub64enc(os.urandom(nb))
+            fn = zb[:nc].decode("ascii") + ext
             ok = not os.path.exists(fsenc(os.path.join(fdir, fn)))
 
     return fn
 
 
-def gen_filekey(alg: int, salt: str, fspath: str, fsize: int, inode: int) -> str:
+def _gen_filekey(alg: int, salt: str, fspath: str, fsize: int, inode: int) -> str:
     if alg == 1:
         zs = "%s %s %s %s" % (salt, fspath, fsize, inode)
     else:
         zs = "%s %s" % (salt, fspath)
 
     zb = zs.encode("utf-8", "replace")
-    return base64.urlsafe_b64encode(hashlib.sha512(zb).digest()).decode("ascii")
+    return ub64enc(hashlib.sha512(zb).digest()).decode("ascii")
+
+
+def _gen_filekey_w(alg: int, salt: str, fspath: str, fsize: int, inode: int) -> str:
+    return _gen_filekey(alg, salt, fspath.replace("/", "\\"), fsize, inode)
+
+
+gen_filekey = _gen_filekey_w if ANYWIN else _gen_filekey
 
 
 def gen_filekey_dbg(
@@ -1648,7 +2073,7 @@ def gen_filekey_dbg(
 ) -> str:
     ret = gen_filekey(alg, salt, fspath, fsize, inode)
 
-    assert log_ptn
+    assert log_ptn  # !rm
     if log_ptn.search(fspath):
         try:
             import inspect
@@ -1663,39 +2088,82 @@ def gen_filekey_dbg(
             if p2 != fspath:
                 raise Exception()
         except:
-            t = "maybe wrong abspath for filekey;\norig: {}\nreal: {}"
-            log(t.format(fspath, p2), 1)
+            t = "maybe wrong abspath for filekey;\norig: %r\nreal: %r"
+            log(t % (fspath, p2), 1)
 
-        t = "fk({}) salt({}) size({}) inode({}) fspath({}) at({})"
-        log(t.format(ret[:8], salt, fsize, inode, fspath, ctx), 5)
+        t = "fk(%s) salt(%s) size(%d) inode(%d) fspath(%r) at(%s)"
+        log(t % (ret[:8], salt, fsize, inode, fspath, ctx), 5)
 
     return ret
 
 
-def gencookie(k: str, v: str, r: str, tls: bool, dur: int = 0, txt: str = "") -> str:
+WKDAYS = "Mon Tue Wed Thu Fri Sat Sun".split()
+MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
+RFC2822 = "%s, %02d %s %04d %02d:%02d:%02d GMT"
+
+
+def formatdate(ts: Optional[float] = None) -> str:
+    # gmtime ~= datetime.fromtimestamp(ts, UTC).timetuple()
+    y, mo, d, h, mi, s, wd, _, _ = time.gmtime(ts)
+    return RFC2822 % (WKDAYS[wd], d, MONTHS[mo - 1], y, h, mi, s)
+
+
+def gencookie(
+    k: str, v: str, r: str, lax: bool, tls: bool, dur: int = 0, txt: str = ""
+) -> str:
     v = v.replace("%", "%25").replace(";", "%3B")
     if dur:
-        exp = formatdate(time.time() + dur, usegmt=True)
+        exp = formatdate(time.time() + dur)
     else:
         exp = "Fri, 15 Aug 1997 01:00:00 GMT"
 
-    t = "%s=%s; Path=/%s; Expires=%s%s%s; SameSite=Lax"
-    return t % (k, v, r, exp, "; Secure" if tls else "", txt)
+    t = "%s=%s; Path=/%s; Expires=%s%s%s; SameSite=%s"
+    return t % (
+        k,
+        v,
+        r,
+        exp,
+        "; Secure" if tls else "",
+        txt,
+        "Lax" if lax else "Strict",
+    )
+
+
+def gen_content_disposition(fn: str) -> str:
+    safe = UC_CDISP_SET
+    bsafe = BC_CDISP_SET
+    fn = fn.replace("/", "_").replace("\\", "_")
+    zb = fn.encode("utf-8", "xmlcharrefreplace")
+    if not PY2:
+        zbl = [
+            chr(x).encode("utf-8")
+            if x in bsafe
+            else "%{:02X}".format(x).encode("ascii")
+            for x in zb
+        ]
+    else:
+        zbl = [unicode(x) if x in bsafe else "%{:02X}".format(ord(x)) for x in zb]
+
+    ufn = b"".join(zbl).decode("ascii")
+    afn = "".join([x if x in safe else "_" for x in fn]).lstrip(".")
+    while ".." in afn:
+        afn = afn.replace("..", ".")
+
+    return "attachment; filename=\"%s\"; filename*=UTF-8''%s" % (afn, ufn)
 
 
 def humansize(sz: float, terse: bool = False) -> str:
-    for unit in ["B", "KiB", "MiB", "GiB", "TiB"]:
+    for unit in HUMANSIZE_UNITS:
         if sz < 1024:
             break
 
         sz /= 1024.0
 
-    ret = " ".join([str(sz)[:4].rstrip("."), unit])
-
-    if not terse:
-        return ret
-
-    return ret.replace("iB", "").replace(" ", "")
+    assert unit  # type: ignore  # !rm
+    if terse:
+        return "%s%s" % (str(sz)[:4].rstrip("."), unit[:1])
+    else:
+        return "%s %s" % (str(sz)[:4].rstrip("."), unit)
 
 
 def unhumanize(sz: str) -> int:
@@ -1705,12 +2173,7 @@ def unhumanize(sz: str) -> int:
         pass
 
     mc = sz[-1:].lower()
-    mi = {
-        "k": 1024,
-        "m": 1024 * 1024,
-        "g": 1024 * 1024 * 1024,
-        "t": 1024 * 1024 * 1024 * 1024,
-    }.get(mc, 1)
+    mi = UNHUMANIZE_UNITS.get(mc, 1)
     return int(float(sz[:-1]) * mi)
 
 
@@ -1718,7 +2181,7 @@ def get_spd(nbyte: int, t0: float, t: Optional[float] = None) -> str:
     if t is None:
         t = time.time()
 
-    bps = nbyte / ((t - t0) + 0.001)
+    bps = nbyte / ((t - t0) or 0.001)
     s1 = humansize(nbyte).replace(" ", "\033[33m").replace("iB", "")
     s2 = humansize(bps).replace(" ", "\033[35m").replace("iB", "")
     return "%s \033[0m%s/s\033[0m" % (s1, s2)
@@ -1752,7 +2215,7 @@ def uncyg(path: str) -> str:
 def undot(path: str) -> str:
     ret: list[str] = []
     for node in path.split("/"):
-        if node in ["", "."]:
+        if node == "." or not node:
             continue
 
         if node == "..":
@@ -1765,12 +2228,9 @@ def undot(path: str) -> str:
     return "/".join(ret)
 
 
-def sanitize_fn(fn: str, ok: str, bad: list[str]) -> str:
+def sanitize_fn(fn: str, ok: str) -> str:
     if "/" not in ok:
         fn = fn.replace("\\", "/").split("/")[-1]
-
-    if fn.lower() in bad:
-        fn = "_" + fn
 
     if ANYWIN:
         remap = [
@@ -1797,9 +2257,9 @@ def sanitize_fn(fn: str, ok: str, bad: list[str]) -> str:
     return fn.strip()
 
 
-def sanitize_vpath(vp: str, ok: str, bad: list[str]) -> str:
+def sanitize_vpath(vp: str, ok: str) -> str:
     parts = vp.replace(os.sep, "/").split("/")
-    ret = [sanitize_fn(x, ok, bad) for x in parts]
+    ret = [sanitize_fn(x, ok) for x in parts]
     return "/".join(ret)
 
 
@@ -1852,14 +2312,14 @@ def odfusion(
     ret = base.copy()
     if oth.startswith("+"):
         for k in words1:
-            ret[k] = True
+            ret[k] = True  # type: ignore
     elif oth[:1] in ("-", "/"):
         for k in words1:
-            ret.pop(k, None)
+            ret.pop(k, None)  # type: ignore
     else:
         ret = ODict.fromkeys(words0, True)
 
-    return ret
+    return ret  # type: ignore
 
 
 def ipnorm(ip: str) -> str:
@@ -1870,13 +2330,23 @@ def ipnorm(ip: str) -> str:
     return ip
 
 
-def find_prefix(ips: list[str], netdevs: dict[str, Netdev]) -> list[str]:
+def find_prefix(ips: list[str], cidrs: list[str]) -> list[str]:
     ret = []
     for ip in ips:
-        hit = next((x for x in netdevs if x.startswith(ip + "/")), None)
+        hit = next((x for x in cidrs if x.startswith(ip + "/") or ip == x), None)
         if hit:
             ret.append(hit)
     return ret
+
+
+def html_sh_esc(s: str) -> str:
+    s = re.sub(RE_HTML_SH, "_", s).replace(" ", "%20")
+    s = s.replace("\r", "_").replace("\n", "_")
+    return s
+
+
+def json_hesc(s: str) -> str:
+    return s.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
 
 def html_escape(s: str, quot: bool = False, crlf: bool = False) -> str:
@@ -1903,27 +2373,89 @@ def html_bescape(s: bytes, quot: bool = False, crlf: bool = False) -> bytes:
 
 def _quotep2(txt: str) -> str:
     """url quoter which deals with bytes correctly"""
+    if not txt:
+        return ""
     btxt = w8enc(txt)
     quot = quote(btxt, safe=b"/")
-    return w8dec(quot.replace(b" ", b"+"))
+    return w8dec(quot.replace(b" ", b"+"))  # type: ignore
 
 
 def _quotep3(txt: str) -> str:
     """url quoter which deals with bytes correctly"""
+    if not txt:
+        return ""
     btxt = w8enc(txt)
     quot = quote(btxt, safe=b"/").encode("utf-8")
     return w8dec(quot.replace(b" ", b"+"))
 
 
-quotep = _quotep3 if not PY2 else _quotep2
+if not PY2:
+    _uqsb = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-~/"
+    _uqtl = {
+        n: ("%%%02X" % (n,) if n not in _uqsb else chr(n)).encode("utf-8")
+        for n in range(256)
+    }
+    _uqtl[b" "] = b"+"
+
+    def _quotep3b(txt: str) -> str:
+        """url quoter which deals with bytes correctly"""
+        if not txt:
+            return ""
+        btxt = w8enc(txt)
+        if btxt.rstrip(_uqsb):
+            lut = _uqtl
+            btxt = b"".join([lut[ch] for ch in btxt])
+        return w8dec(btxt)
+
+    quotep = _quotep3b
+
+    _hexd = "0123456789ABCDEFabcdef"
+    _hex2b = {(a + b).encode(): bytes.fromhex(a + b) for a in _hexd for b in _hexd}
+
+    def unquote(btxt: bytes) -> bytes:
+        h2b = _hex2b
+        parts = iter(btxt.split(b"%"))
+        ret = [next(parts)]
+        for item in parts:
+            c = h2b.get(item[:2])
+            if c is None:
+                ret.append(b"%")
+                ret.append(item)
+            else:
+                ret.append(c)
+                ret.append(item[2:])
+        return b"".join(ret)
+
+    from urllib.parse import quote_from_bytes as quote
+else:
+    from urllib import quote  # type: ignore # pylint: disable=no-name-in-module
+    from urllib import unquote  # type: ignore # pylint: disable=no-name-in-module
+
+    quotep = _quotep2
 
 
 def unquotep(txt: str) -> str:
     """url unquoter which deals with bytes correctly"""
     btxt = w8enc(txt)
-    # btxt = btxt.replace(b"+", b" ")
     unq2 = unquote(btxt)
     return w8dec(unq2)
+
+
+def vroots(vp1: str, vp2: str) -> tuple[str, str]:
+    """
+    input("q/w/e/r","a/s/d/e/r") output("/q/w/","/a/s/d/")
+    """
+    while vp1 and vp2:
+        zt1 = vp1.rsplit("/", 1) if "/" in vp1 else ("", vp1)
+        zt2 = vp2.rsplit("/", 1) if "/" in vp2 else ("", vp2)
+        if zt1[1] != zt2[1]:
+            break
+        vp1 = zt1[0]
+        vp2 = zt2[0]
+    return (
+        "/%s/" % (vp1,) if vp1 else "/",
+        "/%s/" % (vp2,) if vp2 else "/",
+    )
 
 
 def vsplit(vpath: str) -> tuple[str, str]:
@@ -1933,11 +2465,101 @@ def vsplit(vpath: str) -> tuple[str, str]:
     return vpath.rsplit("/", 1)  # type: ignore
 
 
+# vpath-join
 def vjoin(rd: str, fn: str) -> str:
     if rd and fn:
         return rd + "/" + fn
     else:
         return rd or fn
+
+
+# url-join
+def ujoin(rd: str, fn: str) -> str:
+    if rd and fn:
+        return rd.rstrip("/") + "/" + fn.lstrip("/")
+    else:
+        return rd or fn
+
+
+def str_anchor(txt) -> tuple[int, str]:
+    if not txt:
+        return 0, ""
+    txt = txt.lower()
+    a = txt.startswith("^")
+    b = txt.endswith("$")
+    if not b:
+        if not a:
+            return 1, txt  # ~
+        return 2, txt[1:]  # ^
+    if not a:
+        return 3, txt[:-1]  # $
+    return 4, txt[1:-1]  # ^$
+
+
+def log_reloc(
+    log: "NamedLogger",
+    re: dict[str, str],
+    pm: tuple[str, str, str, tuple["VFS", str]],
+    ap: str,
+    vp: str,
+    fn: str,
+    vn: "VFS",
+    rem: str,
+) -> None:
+    nap, nvp, nfn, (nvn, nrem) = pm
+    t = "reloc %s:\nold ap %r\nnew ap %r\033[36m/%r\033[0m\nold vp %r\nnew vp %r\033[36m/%r\033[0m\nold fn %r\nnew fn %r\nold vfs %r\nnew vfs %r\nold rem %r\nnew rem %r"
+    log(t % (re, ap, nap, nfn, vp, nvp, nfn, fn, nfn, vn.vpath, nvn.vpath, rem, nrem))
+
+
+def pathmod(
+    vfs: "VFS", ap: str, vp: str, mod: dict[str, str]
+) -> Optional[tuple[str, str, str, tuple["VFS", str]]]:
+    # vfs: authsrv.vfs
+    # ap: original abspath to a file
+    # vp: original urlpath to a file
+    # mod: modification (ap/vp/fn)
+
+    nvp = "\n"  # new vpath
+    ap = os.path.dirname(ap)
+    vp, fn = vsplit(vp)
+    if mod.get("fn"):
+        fn = mod["fn"]
+        nvp = vp
+
+    for ref, k in ((ap, "ap"), (vp, "vp")):
+        if k not in mod:
+            continue
+
+        ms = mod[k].replace(os.sep, "/")
+        if ms.startswith("/"):
+            np = ms
+        elif k == "vp":
+            np = undot(vjoin(ref, ms))
+        else:
+            np = os.path.abspath(os.path.join(ref, ms))
+
+        if k == "vp":
+            nvp = np.lstrip("/")
+            continue
+
+        # try to map abspath to vpath
+        np = np.replace("/", os.sep)
+        for vn_ap, vns in vfs.all_aps:
+            if not np.startswith(vn_ap):
+                continue
+            zs = np[len(vn_ap) :].replace(os.sep, "/")
+            nvp = vjoin(vns[0].vpath, zs)
+            break
+
+    if nvp == "\n":
+        return None
+
+    vn, rem = vfs.get(nvp, "*", False, False)
+    if not vn.realpath:
+        raise Exception("unmapped vfs")
+
+    ap = vn.canonical(rem)
+    return ap, nvp, fn, (vn, rem)
 
 
 def _w8dec2(txt: bytes) -> str:
@@ -1992,12 +2614,12 @@ w8enc = _w8enc3 if not PY2 else _w8enc2
 
 def w8b64dec(txt: str) -> str:
     """decodes base64(filesystem-bytes) to wtf8"""
-    return w8dec(base64.urlsafe_b64decode(txt.encode("ascii")))
+    return w8dec(ub64dec(txt.encode("ascii")))
 
 
 def w8b64enc(txt: str) -> str:
     """encodes wtf8 to base64(filesystem-bytes)"""
-    return base64.urlsafe_b64encode(w8enc(txt)).decode("ascii")
+    return ub64enc(w8enc(txt)).decode("ascii")
 
 
 if not PY2 and WINDOWS:
@@ -2056,45 +2678,170 @@ def lsof(log: "NamedLogger", abspath: str) -> None:
     try:
         rc, so, se = runcmd([b"lsof", b"-R", fsenc(abspath)], timeout=45)
         zs = (so.strip() + "\n" + se.strip()).strip()
-        log("lsof {} = {}\n{}".format(abspath, rc, zs), 3)
+        log("lsof %r = %s\n%s" % (abspath, rc, zs), 3)
     except:
         log("lsof failed; " + min_ex(), 3)
 
 
-def atomic_move(usrc: str, udst: str) -> None:
-    src = fsenc(usrc)
-    dst = fsenc(udst)
-    if not PY2:
-        os.replace(src, dst)
-    else:
-        if os.path.exists(dst):
-            os.unlink(dst)
-
-        os.rename(src, dst)
+def set_fperms(f: Union[typing.BinaryIO, typing.IO[Any]], vf: dict[str, Any]) -> None:
+    fno = f.fileno()
+    if "chmod_f" in vf:
+        os.fchmod(fno, vf["chmod_f"])
+    if "chown" in vf:
+        os.fchown(fno, vf["uid"], vf["gid"])
 
 
-def get_df(abspath: str) -> tuple[Optional[int], Optional[int]]:
+def trystat_shutil_copy2(log: "NamedLogger", src: bytes, dst: bytes) -> bytes:
     try:
-        # some fuses misbehave
-        assert ctypes
-        if ANYWIN:
-            bfree = ctypes.c_ulonglong(0)
-            ctypes.windll.kernel32.GetDiskFreeSpaceExW(  # type: ignore
-                ctypes.c_wchar_p(abspath), None, None, ctypes.pointer(bfree)
-            )
-            return (bfree.value, None)
-        else:
-            sv = os.statvfs(fsenc(abspath))
-            free = sv.f_frsize * sv.f_bfree
-            total = sv.f_frsize * sv.f_blocks
-            return (free, total)
+        return shutil.copy2(src, dst)
     except:
-        return (None, None)
+        # ignore failed mtime on linux+ntfs; for example:
+        # shutil.py:437 <copy2>: copystat(src, dst, follow_symlinks=follow_symlinks)
+        # shutil.py:376 <copystat>: lookup("utime")(dst, ns=(st.st_atime_ns, st.st_mtime_ns),
+        # [PermissionError] [Errno 1] Operation not permitted, '/windows/_videos'
+        _, _, tb = sys.exc_info()
+        for _, _, fun, _ in traceback.extract_tb(tb):
+            if fun == "copystat":
+                if log:
+                    t = "warning: failed to retain some file attributes (timestamp and/or permissions) during copy from %r to %r:\n%s"
+                    log(t % (src, dst, min_ex()), 3)
+                return dst  # close enough
+        raise
+
+
+def _fs_mvrm(
+    log: "NamedLogger", src: str, dst: str, atomic: bool, flags: dict[str, Any]
+) -> bool:
+    bsrc = fsenc(src)
+    bdst = fsenc(dst)
+    if atomic:
+        k = "mv_re_"
+        act = "atomic-rename"
+        osfun = os.replace
+        args = [bsrc, bdst]
+    elif dst:
+        k = "mv_re_"
+        act = "rename"
+        osfun = os.rename
+        args = [bsrc, bdst]
+    else:
+        k = "rm_re_"
+        act = "delete"
+        osfun = os.unlink
+        args = [bsrc]
+
+    maxtime = flags.get(k + "t", 0.0)
+    chill = flags.get(k + "r", 0.0)
+    if chill < 0.001:
+        chill = 0.1
+
+    ino = 0
+    t0 = now = time.time()
+    for attempt in range(90210):
+        try:
+            if ino and os.stat(bsrc).st_ino != ino:
+                t = "src inode changed; aborting %s %r"
+                log(t % (act, src), 1)
+                return False
+            if (dst and not atomic) and os.path.exists(bdst):
+                t = "something appeared at dst; aborting rename %r ==> %r"
+                log(t % (src, dst), 1)
+                return False
+            osfun(*args)  # type: ignore
+            if attempt:
+                now = time.time()
+                t = "%sd in %.2f sec, attempt %d: %r"
+                log(t % (act, now - t0, attempt + 1, src))
+            return True
+        except OSError as ex:
+            now = time.time()
+            if ex.errno == errno.ENOENT:
+                return False
+            if not attempt and ex.errno == errno.EXDEV:
+                t = "using copy+delete (%s)\n  %s\n  %s"
+                log(t % (ex.strerror, src, dst))
+                osfun = shutil.move
+                continue
+            if now - t0 > maxtime or attempt == 90209:
+                raise
+            if not attempt:
+                if not PY2:
+                    ino = os.stat(bsrc).st_ino
+                t = "%s failed (err.%d); retrying for %d sec: %r"
+                log(t % (act, ex.errno, maxtime + 0.99, src))
+
+        time.sleep(chill)
+
+    return False  # makes pylance happy
+
+
+def atomic_move(log: "NamedLogger", src: str, dst: str, flags: dict[str, Any]) -> None:
+    bsrc = fsenc(src)
+    bdst = fsenc(dst)
+    if PY2:
+        if os.path.exists(bdst):
+            _fs_mvrm(log, dst, "", False, flags)  # unlink
+
+        _fs_mvrm(log, src, dst, False, flags)  # rename
+    elif flags.get("mv_re_t"):
+        _fs_mvrm(log, src, dst, True, flags)
+    else:
+        try:
+            os.replace(bsrc, bdst)
+        except OSError as ex:
+            if ex.errno != errno.EXDEV:
+                raise
+            t = "using copy+delete (%s);\n  %s\n  %s"
+            log(t % (ex.strerror, src, dst))
+            try:
+                os.unlink(bdst)
+            except:
+                pass
+            shutil.move(bsrc, bdst)  # type: ignore
+
+
+def wunlink(log: "NamedLogger", abspath: str, flags: dict[str, Any]) -> bool:
+    if not flags.get("rm_re_t"):
+        os.unlink(fsenc(abspath))
+        return True
+
+    return _fs_mvrm(log, abspath, "", False, flags)
+
+
+def get_df(abspath: str, prune: bool) -> tuple[int, int, str]:
+    try:
+        ap = fsenc(abspath)
+        while prune and not os.path.isdir(ap) and BOS_SEP in ap:
+            # strip leafs until it hits an existing folder
+            ap = ap.rsplit(BOS_SEP, 1)[0]
+
+        if ANYWIN:
+            assert ctypes  # type: ignore  # !rm
+            abspath = fsdec(ap)
+            bfree = ctypes.c_ulonglong(0)
+            btotal = ctypes.c_ulonglong(0)
+            bavail = ctypes.c_ulonglong(0)
+            ctypes.windll.kernel32.GetDiskFreeSpaceExW(  # type: ignore
+                ctypes.c_wchar_p(abspath),
+                ctypes.pointer(bavail),
+                ctypes.pointer(btotal),
+                ctypes.pointer(bfree),
+            )
+            return (bavail.value, btotal.value, "")
+        else:
+            sv = os.statvfs(ap)
+            free = sv.f_frsize * sv.f_bavail
+            total = sv.f_frsize * sv.f_blocks
+            return (free, total, "")
+    except Exception as ex:
+        return (0, 0, repr(ex))
 
 
 if not ANYWIN and not MACOS:
 
     def siocoutq(sck: socket.socket) -> int:
+        assert fcntl  # type: ignore  # !rm
+        assert termios  # type: ignore  # !rm
         # SIOCOUTQ^sockios.h == TIOCOUTQ^ioctl.h
         try:
             zb = fcntl.ioctl(sck.fileno(), termios.TIOCOUTQ, b"AAAA")
@@ -2143,10 +2890,11 @@ def shut_socket(log: "NamedLogger", sck: socket.socket, timeout: int = 3) -> Non
         sck.close()
 
 
-def read_socket(sr: Unrecv, total_size: int) -> Generator[bytes, None, None]:
+def read_socket(
+    sr: Unrecv, bufsz: int, total_size: int
+) -> Generator[bytes, None, None]:
     remains = total_size
     while remains > 0:
-        bufsz = 32 * 1024
         if bufsz > remains:
             bufsz = remains
 
@@ -2160,16 +2908,16 @@ def read_socket(sr: Unrecv, total_size: int) -> Generator[bytes, None, None]:
         yield buf
 
 
-def read_socket_unbounded(sr: Unrecv) -> Generator[bytes, None, None]:
+def read_socket_unbounded(sr: Unrecv, bufsz: int) -> Generator[bytes, None, None]:
     try:
         while True:
-            yield sr.recv(32 * 1024)
+            yield sr.recv(bufsz)
     except:
         return
 
 
 def read_socket_chunked(
-    sr: Unrecv, log: Optional["NamedLogger"] = None
+    sr: Unrecv, bufsz: int, log: Optional["NamedLogger"] = None
 ) -> Generator[bytes, None, None]:
     err = "upload aborted: expected chunk length, got [{}] |{}| instead"
     while True:
@@ -2203,7 +2951,7 @@ def read_socket_chunked(
         if log:
             log("receiving %d byte chunk" % (chunklen,))
 
-        for chunk in read_socket(sr, chunklen):
+        for chunk in read_socket(sr, bufsz, chunklen):
             yield chunk
 
         x = sr.recv_ex(2, False)
@@ -2213,8 +2961,6 @@ def read_socket_chunked(
 
 
 def list_ips() -> list[str]:
-    from .stolen.ifaddr import get_adapters
-
     ret: set[str] = set()
     for nic in get_adapters():
         for ipo in nic.ips:
@@ -2226,23 +2972,160 @@ def list_ips() -> list[str]:
     return list(ret)
 
 
-def yieldfile(fn: str) -> Generator[bytes, None, None]:
-    with open(fsenc(fn), "rb", 512 * 1024) as f:
+def build_netmap(csv: str, defer_mutex: bool = False):
+    csv = csv.lower().strip()
+
+    if csv in ("any", "all", "no", ",", ""):
+        return None
+
+    srcs = [x.strip() for x in csv.split(",") if x.strip()]
+
+    expanded_shorthands = False
+    for shorthand in ("lan", "local", "private", "prvt"):
+        if shorthand in srcs:
+            if not expanded_shorthands:
+                srcs += [
+                    # lan:
+                    "10.0.0.0/8",
+                    "172.16.0.0/12",
+                    "192.168.0.0/16",
+                    "fd00::/8",
+                    # link-local:
+                    "169.254.0.0/16",
+                    "fe80::/10",
+                    # loopback:
+                    "127.0.0.0/8",
+                    "::1/128",
+                ]
+                expanded_shorthands = True
+
+            srcs.remove(shorthand)
+
+    if not HAVE_IPV6:
+        srcs = [x for x in srcs if ":" not in x]
+
+    cidrs = []
+    for zs in srcs:
+        if not zs.endswith("."):
+            cidrs.append(zs)
+            continue
+
+        # translate old syntax "172.19." => "172.19.0.0/16"
+        words = len(zs.rstrip(".").split("."))
+        if words == 1:
+            zs += "0.0.0/8"
+        elif words == 2:
+            zs += "0.0/16"
+        elif words == 3:
+            zs += "0/24"
+        else:
+            raise Exception("invalid config value [%s]" % (zs,))
+
+        cidrs.append(zs)
+
+    ips = [x.split("/")[0] for x in cidrs]
+    return NetMap(ips, cidrs, True, False, defer_mutex)
+
+
+def load_ipu(
+    log: "RootLogger", ipus: list[str], defer_mutex: bool = False
+) -> tuple[dict[str, str], NetMap]:
+    ip_u = {"": "*"}
+    cidr_u = {}
+    for ipu in ipus:
+        try:
+            cidr, uname = ipu.split("=")
+            cip, csz = cidr.split("/")
+        except:
+            t = "\n  invalid value %r for argument --ipu; must be CIDR=UNAME (192.168.0.0/16=amelia)"
+            raise Exception(t % (ipu,))
+        uname2 = cidr_u.get(cidr)
+        if uname2 is not None:
+            t = "\n  invalid value %r for argument --ipu; cidr %s already mapped to %r"
+            raise Exception(t % (ipu, cidr, uname2))
+        cidr_u[cidr] = uname
+        ip_u[cip] = uname
+    try:
+        nm = NetMap(["::"], list(cidr_u.keys()), True, True, defer_mutex)
+    except Exception as ex:
+        t = "failed to translate --ipu into netmap, probably due to invalid config: %r"
+        log("root", t % (ex,), 1)
+        raise
+    return ip_u, nm
+
+
+def load_ipr(
+    log: "RootLogger", iprs: list[str], defer_mutex: bool = False
+) -> dict[str, NetMap]:
+    ret = {}
+    for ipr in iprs:
+        try:
+            zs, uname = ipr.split("=")
+            cidrs = zs.split(",")
+        except:
+            t = "\n  invalid value %r for argument --ipr; must be CIDR[,CIDR[,...]]=UNAME (192.168.0.0/16=amelia)"
+            raise Exception(t % (ipr,))
+        try:
+            nm = NetMap(["::"], cidrs, True, True, defer_mutex)
+        except Exception as ex:
+            t = "failed to translate --ipr into netmap, probably due to invalid config: %r"
+            log("root", t % (ex,), 1)
+            raise
+        ret[uname] = nm
+    return ret
+
+
+def yieldfile(fn: str, bufsz: int) -> Generator[bytes, None, None]:
+    readsz = min(bufsz, 128 * 1024)
+    with open(fsenc(fn), "rb", bufsz) as f:
         while True:
-            buf = f.read(128 * 1024)
+            buf = f.read(readsz)
             if not buf:
                 break
 
             yield buf
 
 
+def justcopy(
+    fin: Generator[bytes, None, None],
+    fout: Union[typing.BinaryIO, typing.IO[Any]],
+    hashobj: Optional["hashlib._Hash"],
+    max_sz: int,
+    slp: float,
+) -> tuple[int, str, str]:
+    tlen = 0
+    for buf in fin:
+        tlen += len(buf)
+        if max_sz and tlen > max_sz:
+            continue
+
+        fout.write(buf)
+        if slp:
+            time.sleep(slp)
+
+    return tlen, "checksum-disabled", "checksum-disabled"
+
+
+def eol_conv(
+    fin: Generator[bytes, None, None], conv: str
+) -> Generator[bytes, None, None]:
+    crlf = conv.lower() == "crlf"
+    for buf in fin:
+        buf = buf.replace(b"\r", b"")
+        if crlf:
+            buf = buf.replace(b"\n", b"\r\n")
+        yield buf
+
+
 def hashcopy(
     fin: Generator[bytes, None, None],
     fout: Union[typing.BinaryIO, typing.IO[Any]],
-    slp: int = 0,
-    max_sz: int = 0,
+    hashobj: Optional["hashlib._Hash"],
+    max_sz: int,
+    slp: float,
 ) -> tuple[int, str, str]:
-    hashobj = hashlib.sha512()
+    if not hashobj:
+        hashobj = hashlib.sha512()
     tlen = 0
     for buf in fin:
         tlen += len(buf)
@@ -2254,8 +3137,7 @@ def hashcopy(
         if slp:
             time.sleep(slp)
 
-    digest = hashobj.digest()[:33]
-    digest_b64 = base64.urlsafe_b64encode(digest).decode("utf-8")
+    digest_b64 = ub64enc(hashobj.digest()[:33]).decode("ascii")
 
     return tlen, hashobj.hexdigest(), digest_b64
 
@@ -2267,8 +3149,12 @@ def sendfile_py(
     f: typing.BinaryIO,
     s: socket.socket,
     bufsz: int,
-    slp: int,
+    slp: float,
+    use_poll: bool,
+    dls: dict[str, tuple[float, int]],
+    dl_id: str,
 ) -> int:
+    sent = 0
     remains = upper - lower
     f.seek(lower)
     while remains > 0:
@@ -2285,6 +3171,10 @@ def sendfile_py(
         except:
             return remains
 
+        if dl_id:
+            sent += len(buf)
+            dls[dl_id] = (time.time(), sent)
+
     return 0
 
 
@@ -2295,23 +3185,34 @@ def sendfile_kern(
     f: typing.BinaryIO,
     s: socket.socket,
     bufsz: int,
-    slp: int,
+    slp: float,
+    use_poll: bool,
+    dls: dict[str, tuple[float, int]],
+    dl_id: str,
 ) -> int:
     out_fd = s.fileno()
     in_fd = f.fileno()
     ofs = lower
     stuck = 0.0
+    if use_poll:
+        poll = select.poll()
+        poll.register(out_fd, select.POLLOUT)
+
     while ofs < upper:
         stuck = stuck or time.time()
         try:
-            req = min(2 ** 30, upper - ofs)
-            select.select([], [out_fd], [], 10)
+            req = min(0x2000000, upper - ofs)  # 32 MiB
+            if use_poll:
+                poll.poll(10000)  # type: ignore
+            else:
+                select.select([], [out_fd], [], 10)
             n = os.sendfile(out_fd, in_fd, ofs, req)
             stuck = 0
         except OSError as ex:
             # client stopped reading; do another select
             d = time.time() - stuck
             if d < 3600 and ex.errno == errno.EWOULDBLOCK:
+                time.sleep(0.02)
                 continue
 
             n = 0
@@ -2324,13 +3225,16 @@ def sendfile_kern(
             return upper - ofs
 
         ofs += n
+        if dl_id:
+            dls[dl_id] = (time.time(), ofs - lower)
+
         # print("sendfile: ok, sent {} now, {} total, {} remains".format(n, ofs - lower, upper - ofs))
 
     return 0
 
 
 def statdir(
-    logger: Optional["RootLogger"], scandir: bool, lstat: bool, top: str
+    logger: Optional["RootLogger"], scandir: bool, lstat: bool, top: str, throw: bool
 ) -> Generator[tuple[str, os.stat_result], None, None]:
     if lstat and ANYWIN:
         lstat = False
@@ -2355,8 +3259,9 @@ def statdir(
         else:
             src = "listdir"
             fun: Any = os.lstat if lstat else os.stat
+            btop_ = os.path.join(btop, b"")
             for name in os.listdir(btop):
-                abspath = os.path.join(btop, name)
+                abspath = btop_ + name
                 try:
                     yield (fsdec(name), fun(abspath))
                 except Exception as ex:
@@ -2366,6 +3271,12 @@ def statdir(
                     logger(src, "[s] {} @ {}".format(repr(ex), fsdec(abspath)), 6)
 
     except Exception as ex:
+        if throw:
+            zi = getattr(ex, "errno", 0)
+            if zi == errno.ENOENT:
+                raise Pebkac(404, str(ex))
+            raise
+
         t = "{} @ {}".format(repr(ex), top)
         if logger:
             logger(src, t, 1)
@@ -2374,7 +3285,7 @@ def statdir(
 
 
 def dir_is_empty(logger: "RootLogger", scandir: bool, top: str):
-    for _ in statdir(logger, scandir, False, top):
+    for _ in statdir(logger, scandir, False, top, False):
         return False
     return True
 
@@ -2387,9 +3298,11 @@ def rmdirs(
         top = os.path.dirname(top)
         depth -= 1
 
-    stats = statdir(logger, scandir, lstat, top)
+    stats = statdir(logger, scandir, lstat, top, False)
     dirs = [x[0] for x in stats if stat.S_ISDIR(x[1].st_mode)]
-    dirs = [os.path.join(top, x) for x in dirs]
+    if dirs:
+        top_ = os.path.join(top, "")
+        dirs = [top_ + x for x in dirs]
     ok = []
     ng = []
     for d in reversed(dirs):
@@ -2427,43 +3340,55 @@ def rmdirs_up(top: str, stop: str) -> tuple[list[str], list[str]]:
 
 def unescape_cookie(orig: str) -> str:
     # mw=idk; doot=qwe%2Crty%3Basd+fgh%2Bjkl%25zxc%26vbn  # qwe,rty;asd fgh+jkl%zxc&vbn
-    ret = ""
+    ret = []
     esc = ""
     for ch in orig:
         if ch == "%":
-            if len(esc) > 0:
-                ret += esc
+            if esc:
+                ret.append(esc)
             esc = ch
 
-        elif len(esc) > 0:
+        elif esc:
             esc += ch
             if len(esc) == 3:
                 try:
-                    ret += chr(int(esc[1:], 16))
+                    ret.append(chr(int(esc[1:], 16)))
                 except:
-                    ret += esc
+                    ret.append(esc)
                 esc = ""
 
         else:
-            ret += ch
+            ret.append(ch)
 
-    if len(esc) > 0:
-        ret += esc
+    if esc:
+        ret.append(esc)
 
-    return ret
+    return "".join(ret)
 
 
-def guess_mime(url: str, fallback: str = "application/octet-stream") -> str:
+def guess_mime(
+    url: str, path: str = "", fallback: str = "application/octet-stream"
+) -> str:
     try:
-        _, ext = url.rsplit(".", 1)
+        ext = url.rsplit(".", 1)[1].lower()
     except:
-        return fallback
+        ext = ""
 
     ret = MIMES.get(ext)
 
     if not ret:
         x = mimetypes.guess_type(url)
         ret = "application/{}".format(x[1]) if x[1] else x[0]
+
+    if not ret and path:
+        try:
+            with open(fsenc(path), "rb", 0) as f:
+                ret = magic.from_buffer(f.read(4096), mime=True)
+                if ret.startswith("text/htm"):
+                    # avoid serving up HTML content unless there was actually a .html extension
+                    ret = "text/plain"
+        except Exception as ex:
+            pass
 
     if not ret:
         ret = fallback
@@ -2485,7 +3410,7 @@ def getalive(pids: list[int], pgid: int) -> list[int]:
                     alive.append(pid)
             else:
                 # windows doesn't have pgroups; assume
-                assert psutil
+                assert psutil  # type: ignore  # !rm
                 psutil.Process(pid)
                 alive.append(pid)
         except:
@@ -2503,7 +3428,7 @@ def killtree(root: int) -> None:
         pgid = 0
 
     if HAVE_PSUTIL:
-        assert psutil
+        assert psutil  # type: ignore  # !rm
         pids = [root]
         parent = psutil.Process(root)
         for child in parent.children(recursive=True):
@@ -2568,7 +3493,9 @@ NICEB = NICES.encode("utf-8")
 
 
 def runcmd(
-    argv: Union[list[bytes], list[str]], timeout: Optional[float] = None, **ka: Any
+    argv: Union[list[bytes], list[str], list["LiteralString"]],
+    timeout: Optional[float] = None,
+    **ka: Any
 ) -> tuple[int, str, str]:
     isbytes = isinstance(argv[0], (bytes, bytearray))
     oom = ka.pop("oom", 0)  # 0..1000
@@ -2587,19 +3514,19 @@ def runcmd(
     if ANYWIN:
         if isbytes:
             if argv[0] in CMD_EXEB:
-                argv[0] += b".exe"
+                argv[0] += b".exe"  # type: ignore
         else:
             if argv[0] in CMD_EXES:
-                argv[0] += ".exe"
+                argv[0] += ".exe"  # type: ignore
 
     if ka.pop("nice", None):
         if WINDOWS:
             ka["creationflags"] = 0x4000
         elif NICEB:
             if isbytes:
-                argv = [NICEB] + argv
+                argv = [NICEB] + argv  # type: ignore
             else:
-                argv = [NICES] + argv
+                argv = [NICES] + argv  # type: ignore
 
     p = sp.Popen(argv, stdout=cout, stderr=cerr, **ka)
 
@@ -2611,10 +3538,10 @@ def runcmd(
             pass
 
     if not timeout or PY2:
-        bout, berr = p.communicate(sin)
+        bout, berr = p.communicate(sin)  # type: ignore
     else:
         try:
-            bout, berr = p.communicate(sin, timeout=timeout)
+            bout, berr = p.communicate(sin, timeout=timeout)  # type: ignore
         except sp.TimeoutExpired:
             if kill == "n":
                 return -18, "", ""  # SIGCONT; leave it be
@@ -2624,7 +3551,7 @@ def runcmd(
                 killtree(p.pid)
 
             try:
-                bout, berr = p.communicate(timeout=1)
+                bout, berr = p.communicate(timeout=1)  # type: ignore
             except:
                 bout = b""
                 berr = b""
@@ -2710,10 +3637,13 @@ def retchk(
 
 def _parsehook(
     log: Optional["NamedLogger"], cmd: str
-) -> tuple[bool, bool, bool, float, dict[str, Any], str]:
+) -> tuple[str, bool, bool, bool, bool, bool, float, dict[str, Any], list[str]]:
+    areq = ""
     chk = False
     fork = False
     jtxt = False
+    imp = False
+    sin = False
     wait = 0.0
     tout = 0.0
     kill = "t"
@@ -2727,6 +3657,10 @@ def _parsehook(
             fork = True
         elif arg == "j":
             jtxt = True
+        elif arg == "I":
+            imp = True
+        elif arg == "s":
+            sin = True
         elif arg.startswith("w"):
             wait = float(arg[1:])
         elif arg.startswith("t"):
@@ -2735,8 +3669,12 @@ def _parsehook(
             cap = int(arg[1:])  # 0=none 1=stdout 2=stderr 3=both
         elif arg.startswith("k"):
             kill = arg[1:]  # [t]ree [m]ain [n]one
+        elif arg.startswith("a"):
+            areq = arg[1:]  # required perms
         elif arg.startswith("i"):
             pass
+        elif not arg:
+            break
         else:
             t = "hook: invalid flag {} in {}"
             (log or print)(t.format(arg, ocmd))
@@ -2763,21 +3701,23 @@ def _parsehook(
         "capture": cap,
     }
 
-    cmd = os.path.expandvars(os.path.expanduser(cmd))
+    argv = cmd.split(",") if "," in cmd else [cmd]
 
-    return chk, fork, jtxt, wait, sp_ka, cmd
+    argv[0] = os.path.expandvars(os.path.expanduser(argv[0]))
+
+    return areq, chk, imp, fork, sin, jtxt, wait, sp_ka, argv
 
 
 def runihook(
     log: Optional["NamedLogger"],
+    verbose: bool,
     cmd: str,
     vol: "VFS",
-    ups: list[tuple[str, int, int, str, str, str, int]],
+    ups: list[tuple[str, int, int, str, str, str, int, str]],
 ) -> bool:
-    ocmd = cmd
-    chk, fork, jtxt, wait, sp_ka, cmd = _parsehook(log, cmd)
-    bcmd = [sfsenc(cmd)]
-    if cmd.endswith(".py"):
+    _, chk, _, fork, _, jtxt, wait, sp_ka, acmd = _parsehook(log, cmd)
+    bcmd = [sfsenc(x) for x in acmd]
+    if acmd[0].endswith(".py"):
         bcmd = [sfsenc(pybin)] + bcmd
 
     vps = [vjoin(*list(s3dec(x[3], x[4]))) for x in ups]
@@ -2800,38 +3740,169 @@ def runihook(
     else:
         sp_ka["sin"] = b"\n".join(fsenc(x) for x in aps)
 
+    if acmd[0].startswith("zmq:"):
+        try:
+            msg = sp_ka["sin"].decode("utf-8", "replace")
+            _zmq_hook(log, verbose, "xiu", acmd[0][4:].lower(), msg, wait, sp_ka)
+            if verbose and log:
+                log("hook(xiu) %r OK" % (cmd,), 6)
+        except Exception as ex:
+            if log:
+                log("zeromq failed: %r" % (ex,))
+        return True
+
     t0 = time.time()
     if fork:
-        Daemon(runcmd, ocmd, [bcmd], ka=sp_ka)
+        Daemon(runcmd, cmd, bcmd, ka=sp_ka)
     else:
         rc, v, err = runcmd(bcmd, **sp_ka)  # type: ignore
         if chk and rc:
             retchk(rc, bcmd, err, log, 5)
             return False
 
-    wait -= time.time() - t0
-    if wait > 0:
-        time.sleep(wait)
+    if wait:
+        wait -= time.time() - t0
+        if wait > 0:
+            time.sleep(wait)
 
     return True
 
 
+ZMQ = {}
+ZMQ_DESC = {
+    "pub": "fire-and-forget to all/any connected SUB-clients",
+    "push": "fire-and-forget to one of the connected PULL-clients",
+    "req": "send messages to a REP-server and blocking-wait for ack",
+}
+
+
+def _zmq_hook(
+    log: Optional["NamedLogger"],
+    verbose: bool,
+    src: str,
+    cmd: str,
+    msg: str,
+    wait: float,
+    sp_ka: dict[str, Any],
+) -> tuple[int, str]:
+    import zmq
+
+    try:
+        mtx = ZMQ["mtx"]
+    except:
+        ZMQ["mtx"] = threading.Lock()
+        time.sleep(0.1)
+        mtx = ZMQ["mtx"]
+
+    ret = ""
+    nret = 0
+    t0 = time.time()
+    if verbose and log:
+        log("hook(%s) %r entering zmq-main-lock" % (src, cmd), 6)
+
+    with mtx:
+        try:
+            mode, sck, mtx = ZMQ[cmd]
+        except:
+            mode, uri = cmd.split(":", 1)
+            try:
+                desc = ZMQ_DESC[mode]
+                if log:
+                    t = "libzmq(%s) pyzmq(%s) init(%s); %s"
+                    log(t % (zmq.zmq_version(), zmq.__version__, cmd, desc))
+            except:
+                raise Exception("the only supported ZMQ modes are REQ PUB PUSH")
+
+            try:
+                ctx = ZMQ["ctx"]
+            except:
+                ctx = ZMQ["ctx"] = zmq.Context()
+
+            timeout = sp_ka["timeout"]
+
+            if mode == "pub":
+                sck = ctx.socket(zmq.PUB)
+                sck.setsockopt(zmq.LINGER, 0)
+                sck.bind(uri)
+                time.sleep(1)  # give clients time to connect; avoids losing first msg
+            elif mode == "push":
+                sck = ctx.socket(zmq.PUSH)
+                if timeout:
+                    sck.SNDTIMEO = int(timeout * 1000)
+                sck.setsockopt(zmq.LINGER, 0)
+                sck.bind(uri)
+            elif mode == "req":
+                sck = ctx.socket(zmq.REQ)
+                if timeout:
+                    sck.RCVTIMEO = int(timeout * 1000)
+                sck.setsockopt(zmq.LINGER, 0)
+                sck.connect(uri)
+            else:
+                raise Exception()
+
+            mtx = threading.Lock()
+            ZMQ[cmd] = (mode, sck, mtx)
+
+    if verbose and log:
+        log("hook(%s) %r entering socket-lock" % (src, cmd), 6)
+
+    with mtx:
+        if verbose and log:
+            log("hook(%s) %r sending |%d|" % (src, cmd, len(msg)), 6)
+
+        sck.send_string(msg)  # PUSH can safely timeout here
+
+        if mode == "req":
+            if verbose and log:
+                log("hook(%s) %r awaiting ack from req" % (src, cmd), 6)
+            try:
+                ret = sck.recv().decode("utf-8", "replace")
+                if ret.startswith("return "):
+                    m = re.search("^return ([0-9]+)", ret[:12])
+                    if m:
+                        nret = int(m.group(1))
+            except:
+                sck.close()
+                del ZMQ[cmd]  # bad state; must reset
+                raise Exception("ack timeout; zmq socket killed")
+
+    if ret and log:
+        log("hook(%s) %r ACK: %r" % (src, cmd, ret), 6)
+
+    if wait:
+        wait -= time.time() - t0
+        if wait > 0:
+            time.sleep(wait)
+
+    return nret, ret
+
+
 def _runhook(
     log: Optional["NamedLogger"],
+    verbose: bool,
+    src: str,
     cmd: str,
     ap: str,
     vp: str,
     host: str,
     uname: str,
+    perms: str,
     mt: float,
     sz: int,
     ip: str,
     at: float,
-    txt: str,
-) -> bool:
-    ocmd = cmd
-    chk, fork, jtxt, wait, sp_ka, cmd = _parsehook(log, cmd)
-    if jtxt:
+    txt: Optional[list[str]],
+) -> dict[str, Any]:
+    ret = {"rc": 0}
+    areq, chk, imp, fork, sin, jtxt, wait, sp_ka, acmd = _parsehook(log, cmd)
+    if areq:
+        for ch in areq:
+            if ch not in perms:
+                t = "user %s not allowed to run hook %s; need perms %s, have %s"
+                if log:
+                    log(t % (uname, cmd, areq, perms))
+                return ret  # fallthrough to next hook
+    if imp or jtxt:
         ja = {
             "ap": ap,
             "vp": vp,
@@ -2841,59 +3912,121 @@ def _runhook(
             "at": at or time.time(),
             "host": host,
             "user": uname,
-            "txt": txt,
+            "perms": perms,
+            "src": src,
         }
+        if txt:
+            ja["txt"] = txt[0]
+            ja["body"] = txt[1]
+        if imp:
+            ja["log"] = log
+            mod = loadpy(acmd[0], False)
+            return mod.main(ja)
         arg = json.dumps(ja)
     else:
-        arg = txt or ap
+        arg = txt[0] if txt else ap
 
-    acmd = [cmd, arg]
-    if cmd.endswith(".py"):
+    if acmd[0].startswith("zmq:"):
+        zi, zs = _zmq_hook(log, verbose, src, acmd[0][4:].lower(), arg, wait, sp_ka)
+        if zi:
+            raise Exception("zmq says %d" % (zi,))
+        return {"rc": 0, "stdout": zs}
+
+    if sin:
+        sp_ka["sin"] = (arg + "\n").encode("utf-8", "replace")
+    else:
+        acmd += [arg]
+
+    if acmd[0].endswith(".py"):
         acmd = [pybin] + acmd
 
     bcmd = [fsenc(x) if x == ap else sfsenc(x) for x in acmd]
 
     t0 = time.time()
     if fork:
-        Daemon(runcmd, ocmd, [bcmd], ka=sp_ka)
+        Daemon(runcmd, cmd, [bcmd], ka=sp_ka)
     else:
         rc, v, err = runcmd(bcmd, **sp_ka)  # type: ignore
         if chk and rc:
+            ret["rc"] = rc
             retchk(rc, bcmd, err, log, 5)
-            return False
+        else:
+            try:
+                ret = json.loads(v)
+            except:
+                ret = {}
 
-    wait -= time.time() - t0
-    if wait > 0:
-        time.sleep(wait)
+            try:
+                if "stdout" not in ret:
+                    ret["stdout"] = v
+                if "rc" not in ret:
+                    ret["rc"] = rc
+            except:
+                ret = {"rc": rc, "stdout": v}
 
-    return True
+    if wait:
+        wait -= time.time() - t0
+        if wait > 0:
+            time.sleep(wait)
+
+    return ret
 
 
 def runhook(
     log: Optional["NamedLogger"],
+    broker: Optional["BrokerCli"],
+    up2k: Optional["Up2k"],
+    src: str,
     cmds: list[str],
     ap: str,
     vp: str,
     host: str,
     uname: str,
+    perms: str,
     mt: float,
     sz: int,
     ip: str,
     at: float,
-    txt: str,
-) -> bool:
+    txt: Optional[list[str]],
+) -> dict[str, Any]:
+    assert broker or up2k  # !rm
+    args = (broker or up2k).args  # type: ignore
+    verbose = args.hook_v
     vp = vp.replace("\\", "/")
+    ret = {"rc": 0}
     for cmd in cmds:
         try:
-            if not _runhook(log, cmd, ap, vp, host, uname, mt, sz, ip, at, txt):
-                return False
+            hr = _runhook(
+                log, verbose, src, cmd, ap, vp, host, uname, perms, mt, sz, ip, at, txt
+            )
+            if verbose and log:
+                log("hook(%s) %r => \033[32m%s" % (src, cmd, hr), 6)
+            if not hr:
+                return {}
+            for k, v in hr.items():
+                if k in ("idx", "del") and v:
+                    if broker:
+                        broker.say("up2k.hook_fx", k, v, vp)
+                    else:
+                        assert up2k  # !rm
+                        up2k.fx_backlog.append((k, v, vp))
+                elif k == "reloc" and v:
+                    # idk, just take the last one ig
+                    ret["reloc"] = v
+                elif k in ret:
+                    if k == "rc" and v:
+                        ret[k] = v
+                    elif k == "stdout" and v and not ret[k]:
+                        ret[k] = v
+                else:
+                    ret[k] = v
         except Exception as ex:
-            (log or print)("hook: {}".format(ex))
+            (log or print)("hook: %r, %s" % (ex, ex))
             if ",c," in "," + cmd:
-                return False
+                return {}
             break
 
-    return True
+    return ret
 
 
 def loadpy(ap: str, hot: bool) -> Any:
@@ -2924,9 +4057,15 @@ def loadpy(ap: str, hot: bool) -> Any:
 
 def gzip_orig_sz(fn: str) -> int:
     with open(fsenc(fn), "rb") as f:
-        f.seek(-4, 2)
-        rv = f.read(4)
-        return sunpack(b"I", rv)[0]  # type: ignore
+        return gzip_file_orig_sz(f)
+
+
+def gzip_file_orig_sz(f) -> int:
+    start = f.tell()
+    f.seek(-4, 2)
+    rv = f.read(4)
+    f.seek(start, 0)
+    return sunpack(b"I", rv)[0]  # type: ignore
 
 
 def align_tab(lines: list[str]) -> list[str]:
@@ -3029,6 +4168,8 @@ def termsize() -> tuple[int, int]:
     env = os.environ
 
     def ioctl_GWINSZ(fd: int) -> Optional[tuple[int, int]]:
+        assert fcntl  # type: ignore  # !rm
+        assert termios  # type: ignore  # !rm
         try:
             cr = sunpack(b"hh", fcntl.ioctl(fd, termios.TIOCGWINSZ, b"AAAA"))
             return cr[::-1]
@@ -3053,13 +4194,189 @@ def termsize() -> tuple[int, int]:
 def hidedir(dp) -> None:
     if ANYWIN:
         try:
-            assert ctypes
+            assert ctypes  # type: ignore  # !rm
             k32 = ctypes.WinDLL("kernel32")
             attrs = k32.GetFileAttributesW(dp)
             if attrs >= 0:
                 k32.SetFileAttributesW(dp, attrs | 2)
         except:
             pass
+
+
+_flocks = {}
+
+
+def _lock_file_noop(ap: str) -> bool:
+    return True
+
+
+def _lock_file_ioctl(ap: str) -> bool:
+    assert fcntl  # type: ignore  # !rm
+    try:
+        fd = _flocks.pop(ap)
+        os.close(fd)
+    except:
+        pass
+
+    fd = os.open(ap, os.O_RDWR | os.O_CREAT, 438)
+    # NOTE: the fcntl.lockf identifier is (pid,node);
+    #  the lock will be dropped if os.close(os.open(ap))
+    #  is performed anywhere else in this thread
+
+    try:
+        fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _flocks[ap] = fd
+        return True
+    except Exception as ex:
+        eno = getattr(ex, "errno", -1)
+        try:
+            os.close(fd)
+        except:
+            pass
+        if eno in (errno.EAGAIN, errno.EACCES):
+            return False
+        print("WARNING: unexpected errno %d from fcntl.lockf; %r" % (eno, ex))
+        return True
+
+
+def _lock_file_windows(ap: str) -> bool:
+    try:
+        import msvcrt
+
+        try:
+            fd = _flocks.pop(ap)
+            os.close(fd)
+        except:
+            pass
+
+        fd = os.open(ap, os.O_RDWR | os.O_CREAT, 438)
+        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        return True
+    except Exception as ex:
+        eno = getattr(ex, "errno", -1)
+        if eno == errno.EACCES:
+            return False
+        print("WARNING: unexpected errno %d from msvcrt.locking; %r" % (eno, ex))
+        return True
+
+
+if os.environ.get("PRTY_NO_DB_LOCK"):
+    lock_file = _lock_file_noop
+elif ANYWIN:
+    lock_file = _lock_file_windows
+elif HAVE_FCNTL:
+    lock_file = _lock_file_ioctl
+else:
+    lock_file = _lock_file_noop
+
+
+try:
+    if sys.version_info < (3, 10) or os.environ.get("PRTY_NO_IMPRESO"):
+        # py3.8 doesn't have .files
+        # py3.9 has broken .is_file
+        raise ImportError()
+    import importlib.resources as impresources
+except ImportError:
+    try:
+        import importlib_resources as impresources
+    except ImportError:
+        impresources = None
+try:
+    if sys.version_info > (3, 10):
+        raise ImportError()
+    import pkg_resources
+except ImportError:
+    pkg_resources = None
+
+
+def _pkg_resource_exists(pkg: str, name: str) -> bool:
+    if not pkg_resources:
+        return False
+    try:
+        return pkg_resources.resource_exists(pkg, name)
+    except NotImplementedError:
+        return False
+
+
+def stat_resource(E: EnvParams, name: str):
+    path = E.mod_ + name
+    if os.path.exists(path):
+        return os.stat(fsenc(path))
+    return None
+
+
+def _find_impresource(pkg: types.ModuleType, name: str):
+    assert impresources  # !rm
+    try:
+        files = impresources.files(pkg)
+    except ImportError:
+        return None
+
+    return files.joinpath(name)
+
+
+_rescache_has = {}
+
+
+def _has_resource(name: str):
+    try:
+        return _rescache_has[name]
+    except:
+        pass
+
+    if len(_rescache_has) > 999:
+        _rescache_has.clear()
+
+    assert __package__  # !rm
+    pkg = sys.modules[__package__]
+
+    if impresources:
+        res = _find_impresource(pkg, name)
+        if res and res.is_file():
+            _rescache_has[name] = True
+            return True
+
+    if pkg_resources:
+        if _pkg_resource_exists(pkg.__name__, name):
+            _rescache_has[name] = True
+            return True
+
+    _rescache_has[name] = False
+    return False
+
+
+def has_resource(E: EnvParams, name: str):
+    return _has_resource(name) or os.path.exists(E.mod_ + name)
+
+
+def load_resource(E: EnvParams, name: str, mode="rb") -> IO[bytes]:
+    enc = None if "b" in mode else "utf-8"
+
+    if impresources:
+        assert __package__  # !rm
+        res = _find_impresource(sys.modules[__package__], name)
+        if res and res.is_file():
+            if enc:
+                return res.open(mode, encoding=enc)
+            else:
+                # throws if encoding= is mentioned at all
+                return res.open(mode)
+
+    if pkg_resources:
+        assert __package__  # !rm
+        pkg = sys.modules[__package__]
+        if _pkg_resource_exists(pkg.__name__, name):
+            stream = pkg_resources.resource_stream(pkg.__name__, name)
+            if enc:
+                stream = codecs.getreader(enc)(stream)
+            return stream
+
+    ap = E.mod_ + name
+
+    if PY2:
+        return codecs.open(ap, "r", encoding=enc)  # type: ignore
+
+    return open(ap, mode, encoding=enc)
 
 
 class Pebkac(Exception):
@@ -3089,3 +4406,29 @@ class WrongPostKey(Pebkac):
         self.got = got
         self.fname = fname
         self.datagen = datagen
+
+
+_: Any = (
+    gzip,
+    mp,
+    zlib,
+    BytesIO,
+    quote,
+    unquote,
+    SQLITE_VER,
+    JINJA_VER,
+    PYFTPD_VER,
+    PARTFTPY_VER,
+)
+__all__ = [
+    "gzip",
+    "mp",
+    "zlib",
+    "BytesIO",
+    "quote",
+    "unquote",
+    "SQLITE_VER",
+    "JINJA_VER",
+    "PYFTPD_VER",
+    "PARTFTPY_VER",
+]

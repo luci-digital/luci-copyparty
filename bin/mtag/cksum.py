@@ -2,10 +2,14 @@
 
 import sys
 import json
-import zlib
 import struct
 import base64
 import hashlib
+
+try:
+    from zlib_ng import zlib_ng as zlib
+except:
+    import zlib
 
 try:
     from copyparty.util import fsenc

@@ -8,7 +8,7 @@ import threading
 import time
 from operator import itemgetter
 
-from .__init__ import ANYWIN, TYPE_CHECKING, unicode
+from .__init__ import ANYWIN, PY2, TYPE_CHECKING, unicode
 from .authsrv import LEELOO_DALLAS, VFS
 from .bos import bos
 from .up2k import up2k_wark_from_hashlist
@@ -38,6 +38,9 @@ if True:  # pylint: disable=using-constant-test
 if TYPE_CHECKING:
     from .httpsrv import HttpSrv
 
+if PY2:
+    range = xrange  # type: ignore
+
 
 class U2idx(object):
     def __init__(self, hsrv: "HttpSrv") -> None:
@@ -50,17 +53,56 @@ class U2idx(object):
             self.log("your python does not have sqlite3; searching will be disabled")
             return
 
+        if self.args.srch_icase:
+            self._open_db = self._open_db_icase
+        else:
+            self._open_db = self._open_db_std
+
+        assert sqlite3  # type: ignore  # !rm
+
         self.active_id = ""
         self.active_cur: Optional["sqlite3.Cursor"] = None
         self.cur: dict[str, "sqlite3.Cursor"] = {}
         self.mem_cur = sqlite3.connect(":memory:", check_same_thread=False).cursor()
         self.mem_cur.execute(r"create table a (b text)")
 
+        self.sh_cur: Optional["sqlite3.Cursor"] = None
+
         self.p_end = 0.0
         self.p_dur = 0.0
 
     def log(self, msg: str, c: Union[int, str] = 0) -> None:
         self.log_func("u2idx", msg, c)
+
+    def _open_db_std(self, *args, **kwargs):
+        assert sqlite3  # type: ignore  # !rm
+        kwargs["check_same_thread"] = False
+        return sqlite3.connect(*args, **kwargs)
+
+    def _open_db_icase(self, *args, **kwargs):
+        db = self._open_db_std(*args, **kwargs)
+        db.create_function("casefold", 1, lambda x: x.casefold() if x else x)
+        return db
+
+    def shutdown(self) -> None:
+        if not HAVE_SQLITE3:
+            return
+
+        for cur in self.cur.values():
+            db = cur.connection
+            try:
+                db.interrupt()
+            except:
+                pass
+
+            cur.close()
+            db.close()
+
+        for cur in (self.mem_cur, self.sh_cur):
+            if cur:
+                db = cur.connection
+                cur.close()
+                db.close()
 
     def fsearch(
         self, uname: str, vols: list[VFS], body: dict[str, Any]
@@ -77,21 +119,39 @@ class U2idx(object):
         uv: list[Union[str, int]] = [wark[:16], wark]
 
         try:
-            return self.run_query(uname, vols, uq, uv, False, 99999)[0]
+            return self.run_query(uname, vols, uq, uv, False, True, 99999)[0]
         except:
             raise Pebkac(500, min_ex())
 
-    def get_cur(self, ptop: str) -> Optional["sqlite3.Cursor"]:
-        if not HAVE_SQLITE3:
+    def get_shr(self) -> Optional["sqlite3.Cursor"]:
+        if self.sh_cur:
+            return self.sh_cur
+
+        if not HAVE_SQLITE3 or not self.args.shr:
             return None
 
-        cur = self.cur.get(ptop)
+        assert sqlite3  # type: ignore  # !rm
+
+        db = sqlite3.connect(self.args.shr_db, timeout=2, check_same_thread=False)
+        cur = db.cursor()
+        cur.execute('pragma table_info("sh")').fetchall()
+        self.sh_cur = cur
+        return cur
+
+    def get_cur(self, vn: VFS) -> Optional["sqlite3.Cursor"]:
+        cur = self.cur.get(vn.realpath)
         if cur:
             return cur
 
-        histpath = self.asrv.vfs.histtab.get(ptop)
+        if not HAVE_SQLITE3 or "e2d" not in vn.flags:
+            return None
+
+        assert sqlite3  # type: ignore  # !rm
+
+        ptop = vn.realpath
+        histpath = self.asrv.vfs.dbpaths.get(ptop)
         if not histpath:
-            self.log("no histpath for [{}]".format(ptop))
+            self.log("no dbpath for %r" % (ptop,))
             return None
 
         db_path = os.path.join(histpath, "up2k.db")
@@ -103,10 +163,9 @@ class U2idx(object):
             uri = ""
             try:
                 uri = "{}?mode=ro&nolock=1".format(Path(db_path).as_uri())
-                db = sqlite3.connect(uri, timeout=2, uri=True, check_same_thread=False)
-                cur = db.cursor()
+                cur = self._open_db(uri, timeout=2, uri=True).cursor()
                 cur.execute('pragma table_info("up")').fetchone()
-                self.log("ro: {}".format(db_path))
+                self.log("ro: %r" % (db_path,))
             except:
                 self.log("could not open read-only: {}\n{}".format(uri, min_ex()))
                 # may not fail until the pragma so unset it
@@ -115,8 +174,8 @@ class U2idx(object):
         if not cur:
             # on windows, this steals the write-lock from up2k.deferred_init --
             # seen on win 10.0.17763.2686, py 3.10.4, sqlite 3.37.2
-            cur = sqlite3.connect(db_path, timeout=2, check_same_thread=False).cursor()
-            self.log("opened {}".format(db_path))
+            cur = self._open_db(db_path, timeout=2).cursor()
+            self.log("opened %r" % (db_path,))
 
         self.cur[ptop] = cur
         return cur
@@ -128,6 +187,8 @@ class U2idx(object):
         if not HAVE_SQLITE3:
             return [], [], False
 
+        icase = self.args.srch_icase
+
         q = ""
         v: Union[str, int] = ""
         va: list[Union[str, int]] = []
@@ -135,6 +196,7 @@ class U2idx(object):
         is_key = True
         is_size = False
         is_date = False
+        is_wark = False
         field_end = ""  # closing parenthesis or whatever
         kw_key = ["(", ")", "and ", "or ", "not "]
         kw_val = ["==", "=", "!=", ">", ">=", "<", "<=", "like "]
@@ -153,6 +215,8 @@ class U2idx(object):
                     is_key = kw in kw_key
                     uq = uq[len(kw) :]
                     ok = True
+                    if is_wark:
+                        kw = "= "
                     q += kw
                     break
 
@@ -187,9 +251,17 @@ class U2idx(object):
                 elif v == "path":
                     v = "trim(?||up.rd,'/')"
                     va.append("\nrd")
+                    if icase:
+                        v = "casefold(%s)" % (v,)
 
                 elif v == "name":
                     v = "up.fn"
+                    if icase:
+                        v = "casefold(%s)" % (v,)
+
+                elif v == "w":
+                    v = "substr(up.w,1,16)"
+                    is_wark = True
 
                 elif v == "tags" or ptn_mt.match(v):
                     have_mt = True
@@ -202,7 +274,7 @@ class U2idx(object):
                     v = "exists(select 1 from mt where mt.w = mtw and " + vq
 
                 else:
-                    raise Pebkac(400, "invalid key [{}]".format(v))
+                    raise Pebkac(400, "invalid key %r" % (v,))
 
                 q += v + " "
                 continue
@@ -231,6 +303,14 @@ class U2idx(object):
                 is_size = False
                 v = int(float(v) * 1024 * 1024)
 
+            elif is_wark:
+                is_wark = False
+                v = v.strip("*")
+                if len(v) > 16:
+                    v = v[:16]
+                if len(v) < 16:
+                    raise Pebkac(400, "w/filehash must be 16+ chars")
+
             else:
                 if v.startswith("*"):
                     head = "'%'||"
@@ -239,6 +319,12 @@ class U2idx(object):
                 if v.endswith("*"):
                     tail = "||'%'"
                     v = v[:-1]
+
+            if icase and "casefold(" in q:
+                try:
+                    v = unicode(v).casefold()
+                except:
+                    v = unicode(v).lower()
 
             q += " {}?{} ".format(head, tail)
             va.append(v)
@@ -265,7 +351,7 @@ class U2idx(object):
                 q += " lower({}) {} ? ) ".format(field, oper)
 
         try:
-            return self.run_query(uname, vols, q, va, have_mt, lim)
+            return self.run_query(uname, vols, q, va, have_mt, True, lim)
         except Exception as ex:
             raise Pebkac(500, repr(ex))
 
@@ -274,11 +360,13 @@ class U2idx(object):
         uname: str,
         vols: list[VFS],
         uq: str,
-        uv: list[Union[str, int]],
+        uv: Union[list[str], list[Union[str, int]]],
         have_mt: bool,
+        sort: bool,
         lim: int,
     ) -> tuple[list[dict[str, Any]], list[str], bool]:
-        if self.args.srch_dbg:
+        dbg = self.args.srch_dbg
+        if dbg:
             t = "searching across all %s volumes in which the user has 'r' (full read access):\n  %s"
             zs = "\n  ".join(["/%s = %s" % (x.vpath, x.realpath) for x in vols])
             self.log(t % (len(vols), zs), 5)
@@ -317,18 +405,18 @@ class U2idx(object):
             ptop = vol.realpath
             flags = vol.flags
 
-            cur = self.get_cur(ptop)
+            cur = self.get_cur(vol)
             if not cur:
                 continue
 
-            excl = []
-            for vp2 in self.asrv.vfs.all_vols.keys():
-                if vp2.startswith((vtop + "/").lstrip("/")) and vtop != vp2:
-                    excl.append(vp2[len(vtop) :].lstrip("/"))
+            dots = flags.get("dotsrch") and uname in vol.axs.udot
+            zs = "srch_re_dots" if dots else "srch_re_nodot"
+            rex: re.Pattern = flags.get(zs)  # type: ignore
 
-            if self.args.srch_dbg:
-                t = "searching in volume /%s (%s), excludelist %s"
-                self.log(t % (vtop, ptop, excl), 5)
+            if dbg:
+                t = "searching in volume /%s (%s), excluding %s"
+                self.log(t % (vtop, ptop, rex.pattern), 5)
+                rex_cfg: Optional[re.Pattern] = flags.get("srch_excl")
 
             self.active_cur = cur
 
@@ -341,29 +429,31 @@ class U2idx(object):
 
             sret = []
             fk = flags.get("fk")
-            dots = flags.get("dotsrch") and uname in vol.axs.udot
             fk_alg = 2 if "fka" in flags else 1
             c = cur.execute(uq, tuple(vuv))
             for hit in c:
-                w, ts, sz, rd, fn, ip, at = hit[:7]
+                w, ts, sz, rd, fn = hit[:5]
 
                 if rd.startswith("//") or fn.startswith("//"):
                     rd, fn = s3dec(rd, fn)
 
-                if rd in excl or any([x for x in excl if rd.startswith(x + "/")]):
-                    if self.args.srch_dbg:
-                        zs = vjoin(vjoin(vtop, rd), fn)
-                        t = "database inconsistency in volume '/%s'; ignoring: %s"
-                        self.log(t % (vtop, zs), 1)
+                vp = vjoin(vjoin(vtop, rd), fn)
+
+                if vp in seen_rps:
                     continue
 
-                rp = quotep("/".join([x for x in [vtop, rd, fn] if x]))
-                if not dots and "/." in ("/" + rp):
+                if rex.search(vp):
+                    if dbg:
+                        if rex_cfg and rex_cfg.search(vp):  # type: ignore
+                            self.log("filtered by srch_excl: %s" % (vp,), 6)
+                        elif not dots and "/." in ("/" + vp):
+                            pass
+                        else:
+                            t = "database inconsistency in volume '/%s'; ignoring: %s"
+                            self.log(t % (vtop, vp), 1)
                     continue
 
-                if rp in seen_rps:
-                    continue
-
+                rp = quotep(vp)
                 if not fk:
                     suf = ""
                 else:
@@ -385,7 +475,7 @@ class U2idx(object):
                 if lim < 0:
                     break
 
-                if self.args.srch_dbg:
+                if dbg:
                     t = "in volume '/%s': hit: %s"
                     self.log(t % (vtop, rp), 5)
 
@@ -415,14 +505,15 @@ class U2idx(object):
             ret.extend(sret)
             # print("[{}] {}".format(ptop, sret))
 
-            if self.args.srch_dbg:
+            if dbg:
                 t = "in volume '/%s': got %d hits, %d total so far"
                 self.log(t % (vtop, len(sret), len(ret)), 5)
 
         done_flag.append(True)
         self.active_id = ""
 
-        ret.sort(key=itemgetter("rp"))
+        if sort:
+            ret.sort(key=itemgetter("rp"))
 
         return ret, list(taglist.keys()), lim < 0 and not clamped
 
@@ -433,5 +524,5 @@ class U2idx(object):
                 return
 
         if identifier == self.active_id:
-            assert self.active_cur
+            assert self.active_cur  # !rm
             self.active_cur.connection.interrupt()

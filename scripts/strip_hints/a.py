@@ -47,21 +47,46 @@ def uh(top):
 
 
 def uh1(fp):
+    try:
+        uh2(fp)
+    except:
+        print("failed to process", fp)
+        raise
+
+
+def uh2(fp):
     pr(".")
     cs = strip_file_to_string(fp, no_ast=True, to_empty=True)
 
     # remove expensive imports too
     lns = []
     on = True
+    on2 = True
     for ln in cs.split("\n"):
         if ln.startswith("if True:"):
             on = False
+            continue
+
+        if ln.endswith("# !rm.yes>"):
+            on2 = False
+            continue
+
+        if not on2:
+            if ln.endswith("# !rm.no>"):
+                on2 = True
             continue
 
         if not on and (not ln.strip() or ln.startswith(" ")):
             continue
 
         on = True
+
+        if "  # !rm" in ln:
+            continue
+
+        if ln.endswith("TYPE_CHECKING"):
+            ln = ln.replace("from typing import TYPE_CHECKING", "TYPE_CHECKING = False")
+
         lns.append(ln)
 
     cs = "\n".join(lns)

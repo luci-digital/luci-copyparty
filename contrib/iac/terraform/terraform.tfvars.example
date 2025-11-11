@@ -1,0 +1,27 @@
+# Copy this file to terraform.tfvars and fill in your values
+# DO NOT commit terraform.tfvars to version control!
+
+# Synology NAS Configuration
+synology_host     = "192.168.1.9"    # Your Synology IP
+synology_port     = 5001              # 5000 for HTTP, 5001 for HTTPS
+synology_username = "admin"           # Your admin username
+synology_password = "your-password"   # Your admin password
+synology_ssl      = true              # Use HTTPS
+
+# copyparty Configuration
+copyparty_image = "copyparty/ac:latest"  # Options: min, im, ac (recommended), iv, dj
+copyparty_port  = 3923
+
+# Volume Paths (adjust to match your Synology setup)
+config_volume   = "/volume2/configs/cpp"       # NVMe - config & database
+nvme_volume     = "/volume2/media-nvme"        # NVMe - hot data
+archive_volume  = "/volume1/media-archive"     # HDD - cold storage
+
+# Container Settings
+puid     = 1000      # User ID (run `id -u` on Synology via SSH)
+pgid     = 100       # Group ID (run `id -g` on Synology via SSH)
+timezone = "America/New_York"  # Your timezone
+
+# Resource Limits
+cpu_limit    = "2.0"   # 2 CPU cores
+memory_limit = "2G"    # 2 GB RAM

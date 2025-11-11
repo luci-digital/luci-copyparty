@@ -1,4 +1,7 @@
-FROM    ubuntu:23.04
+FROM    DO_NOT_USE_THIS_DOCKER_IMAGE
+# this image is an unmaintained experiment to see whether alpine was the correct choice (it was)
+
+#FROM    ubuntu:23.04
 WORKDIR /z
 LABEL   org.opencontainers.image.url="https://github.com/9001/copyparty" \
         org.opencontainers.image.source="https://github.com/9001/copyparty/tree/hovudstraum/scripts/docker" \

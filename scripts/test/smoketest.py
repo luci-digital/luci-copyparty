@@ -98,9 +98,11 @@ def tc1(vflags):
 
     args = [
         "-q",
+        "-j0",
         "-p4321",
         "-e2dsa",
         "-e2tsr",
+        "--wram",
         "--ban-403=no",
         "--dbd=yolo",
         "--no-mutagen",

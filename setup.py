@@ -84,7 +84,7 @@ args = {
     "version": about["__version__"],
     "description": (
         "Portable file server with accelerated resumable uploads, "
-        + "deduplication, WebDAV, FTP, zeroconf, media indexer, "
+        + "deduplication, WebDAV, FTP, TFTP, zeroconf, media indexer, "
         + "video thumbnails, audio transcoding, and write-only folders"
     ),
     "long_description": long_description,
@@ -108,9 +108,11 @@ args = {
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: Jython",
         "Programming Language :: Python :: Implementation :: PyPy",
+        "Operating System :: OS Independent",
         "Environment :: Console",
         "Environment :: No Input/Output (Daemon)",
         "Intended Audience :: End Users/Desktop",
@@ -129,18 +131,21 @@ args = {
         "copyparty.stolen.dnslib",
         "copyparty.stolen.ifaddr",
         "copyparty.web",
+        "copyparty.web.tl",
         "copyparty.web.a",
-        "copyparty.web.dd",
         "copyparty.web.deps",
     ],
     "install_requires": ["jinja2"],
     "extras_require": {
+        "all": ["argon2-cffi", "partftpy>=0.4.0", "Pillow", "pyftpdlib", "pyopenssl", "pyzmq"],
         "thumbnails": ["Pillow"],
         "thumbnails2": ["pyvips"],
         "audiotags": ["mutagen"],
         "ftpd": ["pyftpdlib"],
         "ftps": ["pyftpdlib", "pyopenssl"],
+        "tftpd": ["partftpy>=0.4.0"],
         "pwhash": ["argon2-cffi"],
+        "zeromq": ["pyzmq"],
     },
     "entry_points": {"console_scripts": ["copyparty = copyparty.__main__:main"]},
     "scripts": ["bin/partyfuse.py", "bin/u2c.py"],

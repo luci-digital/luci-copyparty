@@ -6,10 +6,10 @@
 	<title>{{ title }}</title>
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
 	<meta name="viewport" content="width=device-width, initial-scale=0.8, minimum-scale=0.6">
-	<meta name="theme-color" content="#333">
-{{ html_head }}
+	<meta name="theme-color" content="#{{ tcolor }}">
 	<link rel="stylesheet" media="screen" href="{{ r }}/.cpr/ui.css?_={{ ts }}">
 	<link rel="stylesheet" media="screen" href="{{ r }}/.cpr/browser.css?_={{ ts }}">
+{{ html_head }}
 	{%- if css %}
 	<link rel="stylesheet" media="screen" href="{{ css }}_={{ ts }}">
 	{%- endif %}
@@ -67,14 +67,14 @@
 	<div id="op_up2k" class="opview"></div>
 
 	<div id="op_cfg" class="opview opbox opwide"></div>
-	
+
 	<h1 id="path">
 		<a href="#" id="entree">🌲</a>
 		{%- for n in vpnodes %}
 		<a href="{{ r }}/{{ n[0] }}">{{ n[1] }}</a>
 		{%- endfor %}
 	</h1>
-	
+
 	<div id="tree"></div>
 
 <div id="wrap">
@@ -108,49 +108,46 @@
 
 {%- for f in files %}
 <tr><td>{{ f.lead }}</td><td><a href="{{ f.href }}">{{ f.name|e }}</a></td><td>{{ f.sz }}</td>
-	{%- if f.tags is defined %}
-		{%- for k in taglist %}
-<td>{{ f.tags[k] }}</td>
-		{%- endfor %}
-	{%- endif %}
-<td>{{ f.ext }}</td><td>{{ f.dt }}</td></tr>
+{%- if f.tags is defined %}
+	{%- for k in taglist %}<td>{{ f.tags[k]|e }}</td>{%- endfor %}
+{%- endif %}<td>{{ f.ext }}</td><td>{{ f.dt }}</td></tr>
 {%- endfor %}
 
 		</tbody>
 	</table>
-	
+
 	<div id="epi" class="logue">{{ "" if sb_lg else logues[1] }}</div>
 
 	<h2 id="wfp"><a href="{{ r }}/?h" id="goh">control-panel</a></h2>
-	
+
 	<a href="#" id="repl">π</a>
 
 </div>
 
-	{%- if srv_info %}
 	<div id="srv_info"><span>{{ srv_info }}</span></div>
-	{%- endif %}
 
 	<div id="widget"></div>
 
 	<script>
-		var SR = {{ r|tojson }},
+		var SR = "{{ r }}",
+			CGV1 = {{ cgv1 }},
 			CGV = {{ cgv|tojson }},
 			TS = "{{ ts }}",
 			dtheme = "{{ dtheme }}",
-			srvinf = "{{ srv_info }}",
-			s_name = "{{ s_name }}",
 			lang = "{{ lang }}",
 			dfavico = "{{ favico }}",
-			have_tags_idx = {{ have_tags_idx|tojson }},
+			have_tags_idx = {{ have_tags_idx }},
 			sb_lg = "{{ sb_lg }}",
-			txt_ext = "{{ txt_ext }}",
 			logues = {{ logues|tojson if sb_lg else "[]" }},
 			ls0 = {{ ls0|tojson }};
 
-		document.documentElement.className = localStorage.cpp_thm || dtheme;
+		var STG = window.localStorage;
+		document.documentElement.className = (STG && STG.cpp_thm) || dtheme;
 	</script>
 	<script src="{{ r }}/.cpr/util.js?_={{ ts }}"></script>
+	{%- if lang != "eng" %}
+	<script src="{{ r }}/.cpr/tl/{{ lang }}.js?_={{ ts }}"></script>
+	{%- endif %}
 	<script src="{{ r }}/.cpr/baguettebox.js?_={{ ts }}"></script>
 	<script src="{{ r }}/.cpr/browser.js?_={{ ts }}"></script>
 	<script src="{{ r }}/.cpr/up2k.js?_={{ ts }}"></script>
@@ -160,3 +157,4 @@
 </body>
 
 </html>
+

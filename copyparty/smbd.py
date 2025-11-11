@@ -12,7 +12,7 @@ from types import SimpleNamespace
 from .__init__ import ANYWIN, EXE, TYPE_CHECKING
 from .authsrv import LEELOO_DALLAS, VFS
 from .bos import bos
-from .util import Daemon, min_ex, pybin, runhook
+from .util import Daemon, absreal, min_ex, pybin, runhook, vjoin
 
 if True:  # pylint: disable=using-constant-test
     from typing import Any, Union
@@ -127,7 +127,7 @@ class SMB(object):
         self.log("smb", msg, c)
 
     def start(self) -> None:
-        Daemon(self.srv.start)
+        Daemon(self.srv.start, "smbd")
 
     def _auth_cb(self, *a, **ka):
         debug("auth-result: %s %s", a, ka)
@@ -151,6 +151,8 @@ class SMB(object):
     def _uname(self) -> str:
         if self.noacc:
             return LEELOO_DALLAS
+        if not self.asrv.acct:
+            return "*"
 
         try:
             # you found it! my single worst bit of code so far
@@ -187,7 +189,9 @@ class SMB(object):
 
         debug('%s("%s", %s) %s @%s\033[K\033[0m', caller, vpath, str(a), perms, uname)
         vfs, rem = self.asrv.vfs.get(vpath, uname, *perms)
-        return vfs, vfs.canonical(rem)
+        if not vfs.realpath:
+            raise Exception("unmapped vfs")
+        return vfs, vjoin(vfs.realpath, rem)
 
     def _listdir(self, vpath: str, *a: Any, **ka: Any) -> list[str]:
         vpath = vpath.replace("\\", "/").lstrip("/")
@@ -195,6 +199,8 @@ class SMB(object):
         uname = self._uname()
         # debug('listdir("%s", %s) @%s\033[K\033[0m', vpath, str(a), uname)
         vfs, rem = self.asrv.vfs.get(vpath, uname, False, False)
+        if not vfs.realpath:
+            raise Exception("unmapped vfs")
         _, vfs_ls, vfs_virt = vfs.ls(
             rem, uname, not self.args.no_scandir, [[False, False]]
         )
@@ -209,7 +215,7 @@ class SMB(object):
         sz = 112 * 2  # ['.', '..']
         for n, fn in enumerate(ls):
             if sz >= 64000:
-                t = "listing only %d of %d files (%d byte) in /%s; see impacket#1433"
+                t = "listing only %d of %d files (%d byte) in /%s for performance; see --smb-nwa-1"
                 warning(t, n, len(ls), sz, vpath)
                 break
 
@@ -238,11 +244,31 @@ class SMB(object):
                 t = "blocked write (no-write-acc %s): /%s @%s"
                 yeet(t % (vfs.axs.uwrite, vpath, uname))
 
+            ap = absreal(ap)
             xbu = vfs.flags.get("xbu")
-            if xbu and not runhook(
-                self.nlog, xbu, ap, vpath, "", "", 0, 0, "1.7.6.2", 0, ""
-            ):
-                yeet("blocked by xbu server config: " + vpath)
+            if xbu:
+                hr = runhook(
+                    self.nlog,
+                    None,
+                    self.hub.up2k,
+                    "xbu.smb",
+                    xbu,
+                    ap,
+                    vpath,
+                    "",
+                    "",
+                    "",
+                    0,
+                    0,
+                    "1.7.6.2",
+                    time.time(),
+                    None,
+                )
+                t = hr.get("rejectmsg") or ""
+                if t or not hr:
+                    if not t:
+                        t = "blocked by xbu server config: %r" % (vpath,)
+                    yeet(t)
 
         ret = bos.open(ap, flags, *a, mode=chmod, **ka)
         if wr:
@@ -297,9 +323,9 @@ class SMB(object):
             t = "blocked rename (no-move-acc %s): /%s @%s"
             yeet(t % (vfs1.axs.umove, vp1, uname))
 
-        self.hub.up2k.handle_mv(uname, vp1, vp2)
+        self.hub.up2k.handle_mv("", uname, "1.7.6.2", vp1, vp2)
         try:
-            bos.makedirs(ap2)
+            bos.makedirs(ap2, vf=vfs2.flags)
         except:
             pass
 
@@ -313,7 +339,7 @@ class SMB(object):
             t = "blocked mkdir (no-write-acc %s): /%s @%s"
             yeet(t % (vfs.axs.uwrite, vpath, uname))
 
-        return bos.mkdir(ap)
+        return bos.mkdir(ap, vfs.flags["chmod_d"])
 
     def _stat(self, vpath: str, *a: Any, **ka: Any) -> os.stat_result:
         try:
@@ -340,7 +366,7 @@ class SMB(object):
             yeet("blocked delete (no-del-acc): " + vpath)
 
         vpath = vpath.replace("\\", "/").lstrip("/")
-        self.hub.up2k.handle_rm(uname, "1.7.6.2", [vpath], [], False)
+        self.hub.up2k.handle_rm(uname, "1.7.6.2", [vpath], [], False, False)
 
     def _utime(self, vpath: str, times: tuple[float, float]) -> None:
         if not self.args.smbw:
@@ -352,7 +378,7 @@ class SMB(object):
             t = "blocked utime (no-write-acc %s): /%s @%s"
             yeet(t % (vfs.axs.uwrite, vpath, uname))
 
-        return bos.utime(ap, times)
+        bos.utime_c(info, ap, int(times[1]), False)
 
     def _p_exists(self, vpath: str) -> bool:
         # ap = "?"

@@ -4,7 +4,7 @@
 # https://github.com/nayuki/QR-Code-generator/blob/daa3114/python/qrcodegen.py
 # the original ^ is extremely well commented so refer to that for explanations
 
-# hacks: binary-only, auto-ecc, render, py2-compat
+# hacks: binary-only, auto-ecc, py2-compat
 
 from __future__ import print_function, unicode_literals
 
@@ -15,6 +15,11 @@ if True:  # pylint: disable=using-constant-test
     from collections.abc import Sequence
 
     from typing import Callable, List, Optional, Tuple, Union
+
+try:
+    range = xrange
+except:
+    pass
 
 
 def num_char_count_bits(ver: int) -> int:
@@ -167,33 +172,6 @@ class QrCode(object):
         self.mask = msk
         self._apply_mask(msk)  # Apply the final choice of mask
         self._draw_format_bits(msk)  # Overwrite old format bits
-
-    def render(self, zoom=1, pad=4) -> str:
-        tab = self.modules
-        sz = self.size
-        if sz % 2 and zoom == 1:
-            tab.append([False] * sz)
-
-        tab = [[False] * sz] * pad + tab + [[False] * sz] * pad
-        tab = [[False] * pad + x + [False] * pad for x in tab]
-
-        rows: list[str] = []
-        if zoom == 1:
-            for y in range(0, len(tab), 2):
-                row = ""
-                for x in range(len(tab[y])):
-                    v = 2 if tab[y][x] else 0
-                    v += 1 if tab[y + 1][x] else 0
-                    row += " ▄▀█"[v]
-                rows.append(row)
-        else:
-            for tr in tab:
-                row = ""
-                for zb in tr:
-                    row += " █"[int(zb)] * 2
-                rows.append(row)
-
-        return "\n".join(rows)
 
     def _draw_function_patterns(self) -> None:
         # Draw horizontal and vertical timing patterns

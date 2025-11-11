@@ -15,8 +15,16 @@ save one of these as `.epilogue.html` inside a folder to customize it:
 point `--js-browser` to one of these by URL:
 
 * [`minimal-up2k.js`](minimal-up2k.js) is similar to the above `minimal-up2k.html` except it applies globally to all write-only folders
+* [`quickmove.js`](quickmove.js) adds a hotkey to move selected files into a subfolder
 * [`up2k-hooks.js`](up2k-hooks.js) lets you specify a ruleset for files to skip uploading
   * [`up2k-hook-ytid.js`](up2k-hook-ytid.js) is a more specific example checking youtube-IDs against some API
+
+
+
+## example any-js
+point `--js-browser` and/or `--js-other` to one of these by URL:
+
+* [`banner.js`](banner.js) shows a very enterprise [legal-banner](https://github.com/user-attachments/assets/8ae8e087-b209-449c-b08d-74e040f0284b)
 
 
 

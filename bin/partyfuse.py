@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import print_function, unicode_literals
 
 """partyfuse: remote copyparty as a local filesystem"""
 __author__ = "ed <copyparty@ocv.me>"
@@ -7,15 +6,22 @@ __copyright__ = 2019
 __license__ = "MIT"
 __url__ = "https://github.com/9001/copyparty/"
 
+S_VERSION = "2.1"
+S_BUILD_DT = "2025-09-06"
 
 """
 mount a copyparty server (local or remote) as a filesystem
+
+speeds:
+  1 GiB/s reading large files
+  27'000 files/sec: copy small files
+  700 folders/sec: copy small folders
 
 usage:
   python partyfuse.py http://192.168.1.69:3923/  ./music
 
 dependencies:
-  python3 -m pip install --user fusepy
+  python3 -m pip install --user fusepy  # or grab it from the connect page
   + on Linux: sudo apk add fuse
   + on Macos: https://osxfuse.github.io/
   + on Windows: https://github.com/billziss-gh/winfsp/releases/latest
@@ -29,30 +35,36 @@ get server cert:
 """
 
 
-import re
-import os
-import sys
-import time
-import json
-import stat
-import errno
-import struct
-import codecs
-import builtins
-import platform
 import argparse
-import threading
-import traceback
-import http.client  # py2: httplib
-import urllib.parse
 import calendar
+import codecs
+import errno
+import json
+import os
+import platform
+import re
+import stat
+import struct
+import sys
+import threading
+import time
+import traceback
+import urllib.parse
 from datetime import datetime, timezone
 from urllib.parse import quote_from_bytes as quote
 from urllib.parse import unquote_to_bytes as unquote
 
+import builtins
+import http.client
+
 WINDOWS = sys.platform == "win32"
 MACOS = platform.system() == "Darwin"
 UTC = timezone.utc
+
+# !rm.yes>
+MON3S = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec"
+MON3 = {b: a for a, b in enumerate(MON3S.split(), 1)}
+# !rm.no>
 
 
 def print(*args, **kwargs):
@@ -71,11 +83,12 @@ print(
 )
 
 
-def null_log(msg):
+def nullfun(*a):
     pass
 
 
-info = log = dbg = null_log
+info = dbg = nullfun
+is_dbg = False
 
 
 try:
@@ -86,7 +99,7 @@ except:
     elif MACOS:
         libfuse = "install https://osxfuse.github.io/"
     else:
-        libfuse = "apt install libfuse3-3\n    modprobe fuse"
+        libfuse = "apt install libfuse2\n    modprobe fuse"
 
     m = """\033[33m
   could not import fuse; these may help:
@@ -98,37 +111,35 @@ except:
 
 
 def termsafe(txt):
+    enc = sys.stdout.encoding
     try:
-        return txt.encode(sys.stdout.encoding, "backslashreplace").decode(
-            sys.stdout.encoding
-        )
+        return txt.encode(enc, "backslashreplace").decode(enc)
     except:
-        return txt.encode(sys.stdout.encoding, "replace").decode(sys.stdout.encoding)
+        return txt.encode(enc, "replace").decode(enc)
 
 
-def threadless_log(msg):
-    print(msg + "\n", end="")
+def threadless_log(fmt, *a):
+    fmt += "\n"
+    print(fmt % a if a else fmt, end="")
 
 
-def boring_log(msg):
-    msg = "\033[36m{:012x}\033[0m {}\n".format(threading.current_thread().ident, msg)
-    print(msg[4:], end="")
+riced_tids = {}
 
 
 def rice_tid():
     tid = threading.current_thread().ident
-    c = struct.unpack(b"B" * 5, struct.pack(b">Q", tid)[-5:])
-    return "".join("\033[1;37;48;5;{}m{:02x}".format(x, x) for x in c) + "\033[0m"
+    try:
+        return riced_tids[tid]
+    except:
+        c = struct.unpack(b"B" * 5, struct.pack(b">Q", tid)[-5:])
+        ret = "".join("\033[1;37;48;5;%dm%02x" % (x, x) for x in c) + "\033[0m"
+        riced_tids[tid] = ret
+        return ret
 
 
-def fancy_log(msg):
-    print("{:10.6f} {} {}\n".format(time.time() % 900, rice_tid(), msg), end="")
-
-
-def hexler(binary):
-    return binary.replace("\r", "\\r").replace("\n", "\\n")
-    return " ".join(["{}\033[36m{:02x}\033[0m".format(b, ord(b)) for b in binary])
-    return " ".join(map(lambda b: format(ord(b), "02x"), binary))
+def fancy_log(fmt, *a):
+    msg = fmt % a if a else fmt
+    print("%10.6f %s %s\n" % (time.time() % 900, rice_tid(), msg), end="")
 
 
 def register_wtf8():
@@ -151,35 +162,34 @@ good_bad = {}
 def enwin(txt):
     return "".join([bad_good.get(x, x) for x in txt])
 
-    for bad, good in bad_good.items():
-        txt = txt.replace(bad, good)
-
-    return txt
-
 
 def dewin(txt):
     return "".join([good_bad.get(x, x) for x in txt])
 
-    for bad, good in bad_good.items():
-        txt = txt.replace(good, bad)
-
-    return txt
-
 
 class RecentLog(object):
-    def __init__(self):
+    def __init__(self, ar):
+        self.ar = ar
         self.mtx = threading.Lock()
-        self.f = None  # open("partyfuse.log", "wb")
+        self.f = open(ar.logf, "wb") if ar.logf else None
         self.q = []
 
         thr = threading.Thread(target=self.printer)
         thr.daemon = True
         thr.start()
 
-    def put(self, msg):
-        msg = "{:10.6f} {} {}\n".format(time.time() % 900, rice_tid(), msg)
+    def put(self, fmt, *a):
+        msg = fmt % a if a else fmt
+        msg = "%10.6f %s %s\n" % (time.time() % 900, rice_tid(), msg)
         if self.f:
-            fmsg = " ".join([datetime.now(UTC).strftime("%H%M%S.%f"), str(msg)])
+            zd = datetime.now(UTC)
+            fmsg = "%d-%04d-%06d.%06d %s" % (
+                zd.year,
+                zd.month * 100 + zd.day,
+                (zd.hour * 100 + zd.minute) * 100 + zd.second,
+                zd.microsecond,
+                msg,
+            )
             self.f.write(fmsg.encode("utf-8"))
 
         with self.mtx:
@@ -244,11 +254,16 @@ class CacheNode(object):
 
 class Gateway(object):
     def __init__(self, ar):
-        self.base_url = ar.base_url
+        zs = ar.base_url
+        if "://" not in zs:
+            zs = "http://" + zs
+
+        self.base_url = zs
         self.password = ar.a
 
-        ui = urllib.parse.urlparse(self.base_url)
+        ui = urllib.parse.urlparse(zs)
         self.web_root = ui.path.strip("/")
+        self.SRS = "/%s/" % (self.web_root,) if self.web_root else "/"
         try:
             self.web_host, self.web_port = ui.netloc.split(":")
             self.web_port = int(self.web_port)
@@ -273,6 +288,41 @@ class Gateway(object):
                 self.ssl_context.load_verify_locations(ar.te)
 
         self.conns = {}
+
+        self.fsuf = "?raw"
+        self.dsuf = "?ls&lt&dots"
+
+        # !rm.yes>
+        if not ar.html:
+            self.parse_html = None
+
+        elif ar.html == "cpp":
+            self.parse_html = self.parse_cpp
+            self.dsuf = "?lt&dots"
+            self.re_row = re.compile(
+                r'^<tr><td>(-|DIR|<a [^<]+</a>)</td><td><a[^>]* href="([^"]+)"[^>]*>([^<]+)</a></td><td>([^<]+)</td><td>.*</td><td>([^<]+)</td></tr>$'
+            )
+
+        elif ar.html == "nginx":
+            self.parse_html = self.parse_nginx
+            self.fsuf = ""
+            self.dsuf = ""
+            self.re_row = re.compile(
+                r'^<a href="([^"]+)">([^<]+)</a> *([0-9]{2})-([A-Z][a-z]{2})-([0-9]{4}) ([0-9]{2}:[0-9]{2}) *(-|[0-9]+)\r?$'
+            )
+
+        elif ar.html == "iis":
+            self.parse_html = self.parse_iis
+            self.fsuf = ""
+            self.dsuf = ""
+            self.re_2nl = re.compile(br"<br>|</pre>")
+            self.re_row = re.compile(
+                r'^ *([0-9]{1,2})/([0-9]{1,2})/([0-9]{4}) {1,2}([0-9]{1,2}:[0-9]{2}) ([AP]M) +(&lt;dir&gt;|[0-9]+) <A HREF="([^"]+)">([^<>]+)</A>$'
+            )
+
+        else:
+            raise Exception("unknown HTML dialect: [%s]" % (ar.html,))
+        # !rm.no>
 
     def quotep(self, path):
         path = path.encode("wtf-8")
@@ -309,14 +359,14 @@ class Gateway(object):
     def sendreq(self, meth, path, headers, **kwargs):
         tid = get_tid()
         if self.password:
-            headers["Cookie"] = "=".join(["cppwd", self.password])
+            headers["PW"] = self.password
 
         try:
             c = self.getconn(tid)
             c.request(meth, path, headers=headers, **kwargs)
             return c.getresponse()
-        except:
-            dbg("bad conn")
+        except Exception as ex:
+            info("HTTP %r", ex)
 
         self.closeconn(tid)
         try:
@@ -337,66 +387,61 @@ class Gateway(object):
         if bad_good:
             path = dewin(path)
 
-        web_path = self.quotep("/" + "/".join([self.web_root, path])) + "?dots&ls"
+        zs = "%s%s/" if path else "%s%s"
+        web_path = self.quotep(zs % (self.SRS, path)) + self.dsuf
         r = self.sendreq("GET", web_path, {})
         if r.status != 200:
             self.closeconn()
-            log(
-                "http error {} reading dir {} in {}".format(
-                    r.status, web_path, rice_tid()
-                )
-            )
-            raise FuseOSError(errno.ENOENT)
+            info("http error %s reading dir %r", r.status, web_path)
+            err = errno.ENOENT if r.status == 404 else errno.EIO
+            raise FuseOSError(err)
 
         ctype = r.getheader("Content-Type", "")
         if ctype == "application/json":
             parser = self.parse_jls
+            # !rm.yes>
         elif ctype.startswith("text/html"):
             parser = self.parse_html
+            # !rm.no>
         else:
-            log("listdir on file: {}".format(path))
+            info("listdir on file (%s): %r", ctype, path)
             raise FuseOSError(errno.ENOENT)
 
         try:
             return parser(r)
         except:
-            info(repr(path) + "\n" + traceback.format_exc())
-            raise
+            info("parser: %r\n%s", path, traceback.format_exc())
+            raise FuseOSError(errno.EIO)
 
     def download_file_range(self, path, ofs1, ofs2):
         if bad_good:
             path = dewin(path)
 
-        web_path = self.quotep("/" + "/".join([self.web_root, path])) + "?raw"
-        hdr_range = "bytes={}-{}".format(ofs1, ofs2 - 1)
-        info(
-            "DL {:4.0f}K\033[36m{:>9}-{:<9}\033[0m{}".format(
-                (ofs2 - ofs1) / 1024.0, ofs1, ofs2 - 1, hexler(path)
-            )
-        )
+        web_path = self.quotep("%s%s" % (self.SRS, path)) + self.fsuf
+        hdr_range = "bytes=%d-%d" % (ofs1, ofs2 - 1)
+
+        t = "DL %4.0fK\033[36m%9d-%-9d\033[0m%r"
+        info(t, (ofs2 - ofs1) / 1024.0, ofs1, ofs2 - 1, path)
 
         r = self.sendreq("GET", web_path, {"Range": hdr_range})
         if r.status != http.client.PARTIAL_CONTENT:
+            t = "http error %d reading file %r range %s in %s"
+            info(t, r.status, web_path, hdr_range, rice_tid())
             self.closeconn()
-            raise Exception(
-                "http error {} reading file {} range {} in {}".format(
-                    r.status, web_path, hdr_range, rice_tid()
-                )
-            )
+            raise FuseOSError(errno.EIO)
 
         return r.read()
 
-    def parse_jls(self, datasrc):
+    def parse_jls(self, sck):
         rsp = b""
         while True:
-            buf = datasrc.read(1024 * 32)
+            buf = sck.read(1024 * 32)
             if not buf:
                 break
-
             rsp += buf
 
         rsp = json.loads(rsp.decode("utf-8"))
-        ret = []
+        ret = {}
         for statfun, nodes in [
             [self.stat_dir, rsp["dirs"]],
             [self.stat_file, rsp["files"]],
@@ -406,34 +451,37 @@ class Gateway(object):
                 if bad_good:
                     fname = enwin(fname)
 
-                ret.append([fname, statfun(n["ts"], n["sz"]), 0])
+                ret[fname] = statfun(n["ts"], n["sz"])
 
         return ret
 
-    def parse_html(self, datasrc):
-        ret = []
-        remainder = b""
-        ptn = re.compile(
-            r'^<tr><td>(-|DIR|<a [^<]+</a>)</td><td><a[^>]* href="([^"]+)"[^>]*>([^<]+)</a></td><td>([^<]+)</td><td>[^<]+</td><td>([^<]+)</td></tr>$'
-        )
+    # !rm.yes>
+    ####################################################################
+    ####################################################################
+
+    def parse_cpp(self, sck):
+        # https://a.ocv.me/pub/
+
+        ret = {}
+        rem = b""
+        ptn = self.re_row
 
         while True:
-            buf = remainder + datasrc.read(4096)
-            # print('[{}]'.format(buf.decode('utf-8')))
+            buf = sck.read(1024 * 32)
             if not buf:
                 break
 
-            remainder = b""
-            endpos = buf.rfind(b"\n")
-            if endpos >= 0:
-                remainder = buf[endpos + 1 :]
-                buf = buf[:endpos]
+            buf = rem + buf
+            rem = b""
+            idx = buf.rfind(b"\n")
+            if idx >= 0:
+                rem = buf[idx + 1 :]
+                buf = buf[:idx]
 
             lines = buf.decode("utf-8").split("\n")
             for line in lines:
                 m = ptn.match(line)
                 if not m:
-                    # print(line)
                     continue
 
                 ftype, furl, fname, fsize, fdate = m.groups()
@@ -449,17 +497,121 @@ class Gateway(object):
                     sz = int(fsize)
                     ts = calendar.timegm(time.strptime(fdate, "%Y-%m-%d %H:%M:%S"))
                 except:
-                    info("bad HTML or OS [{}] [{}]".format(fdate, fsize))
+                    info("bad HTML or OS %r %r\n%r", fdate, fsize, line)
                     # python cannot strptime(1959-01-01) on windows
 
-                if ftype != "DIR":
-                    ret.append([fname, self.stat_file(ts, sz), 0])
+                if ftype != "DIR" and "zip=crc" not in ftype:
+                    ret[fname] = self.stat_file(ts, sz)
                 else:
-                    ret.append([fname, self.stat_dir(ts, sz), 0])
+                    ret[fname] = self.stat_dir(ts, sz)
 
         return ret
 
-    def stat_dir(self, ts, sz=4096):
+    def parse_nginx(self, sck):
+        # https://ocv.me/stuff/  "06-Feb-2015 15:43"
+
+        ret = {}
+        rem = b""
+        re_row = self.re_row
+
+        while True:
+            buf = sck.read(1024 * 32)
+            if not buf:
+                break
+
+            buf = rem + buf
+            rem = b""
+            idx = buf.rfind(b"\n")
+            if idx >= 0:
+                rem = buf[idx + 1 :]
+                buf = buf[:idx]
+
+            fdate = ""
+            lines = buf.decode("utf-8").split("\n")
+            for line in lines:
+                m = re_row.match(line)
+                if not m:
+                    continue
+
+                furl, fname, day, smon, year, hm, fsize = m.groups()
+                fname = furl.rstrip("/").split("/")[-1]
+                fname = unquote(fname)
+                fname = fname.decode("wtf-8")
+                if bad_good:
+                    fname = enwin(fname)
+
+                sz = 1
+                ts = 60 * 60 * 24 * 2
+                try:
+                    fdate = "%s-%02d-%s %s" % (year, MON3[smon], day, hm)
+                    ts = calendar.timegm(time.strptime(fdate, "%Y-%m-%d %H:%M"))
+                    sz = -1 if fsize == "-" else int(fsize)
+                except:
+                    info("bad HTML or OS %r %r\n%r", fdate, fsize, line)
+
+                if sz == -1:
+                    ret[fname] = self.stat_dir(ts, 4096)
+                else:
+                    ret[fname] = self.stat_file(ts, sz)
+
+        return ret
+
+    def parse_iis(self, sck):
+        # https://nedlasting.miljodirektoratet.no/miljodata/  " 9/28/2024  5:24 AM"
+        # https://grandcanyon.usgs.gov/photos/Foodbase/CISP/  " 6/29/2012  3:12 PM"
+
+        ret = {}
+        rem = b""
+        re_row = self.re_row
+        re_2nl = self.re_2nl
+
+        while True:
+            buf = sck.read(1024 * 32)
+            if not buf:
+                break
+
+            buf = rem + buf
+            rem = b""
+            buf = re_2nl.sub(b"\n", buf)
+            idx = buf.rfind(b"\n")
+            if idx >= 0:
+                rem = buf[idx + 1 :]
+                buf = buf[:idx]
+
+            lines = buf.decode("utf-8").split("\n")
+            for line in lines:
+                m = re_row.match(line)
+                if not m:
+                    continue
+
+                mon, day, year, hm, xm, fsize, furl, fname = m.groups()
+                fname = furl.rstrip("/").split("/")[-1]
+                fname = unquote(fname)
+                fname = fname.decode("wtf-8")
+                if bad_good:
+                    fname = enwin(fname)
+
+                sz = 1
+                ts = 60 * 60 * 24 * 2
+                fdate = "%s-%s-%s %s %s" % (year, mon, day, hm, xm)
+                try:
+                    ts = calendar.timegm(time.strptime(fdate, "%Y-%m-%d %H:%M %p"))
+                    sz = -1 if fsize == "&lt;dir&gt;" else int(fsize)
+                except:
+                    info("bad HTML or OS %r %r\n%r", fdate, fsize, line)
+
+                if sz == -1:
+                    ret[fname] = self.stat_dir(ts, 4096)
+                else:
+                    ret[fname] = self.stat_file(ts, sz)
+
+        return ret
+
+    ####################################################################
+    ####################################################################
+    # !rm.no>
+
+    def stat_dir(self, ts, sz):
         return {
             "st_mode": stat.S_IFDIR | 0o555,
             "st_uid": 1000,
@@ -488,7 +640,8 @@ class CPPF(Operations):
     def __init__(self, ar):
         self.gw = Gateway(ar)
         self.junk_fh_ctr = 3
-        self.n_dircache = ar.cd
+        self.t_dircache = ar.cds
+        self.n_dircache = ar.cdn
         self.n_filecache = ar.cf
 
         self.dircache = []
@@ -500,42 +653,45 @@ class CPPF(Operations):
         info("up")
 
     def _describe(self):
-        msg = ""
+        msg = []
         with self.filecache_mtx:
             for n, cn in enumerate(self.filecache):
                 cache_path, cache1 = cn.tag
                 cache2 = cache1 + len(cn.data)
-                msg += "\n{:<2} {:>7} {:>10}:{:<9} {}".format(
+                t = "\n{:<2} {:>7} {:>10}:{:<9} {}".format(
                     n,
                     len(cn.data),
                     cache1,
                     cache2,
                     cache_path.replace("\r", "\\r").replace("\n", "\\n"),
                 )
-        return msg
+                msg.append(t)
+        return "".join(msg)
 
     def clean_dircache(self):
         """not threadsafe"""
         now = time.time()
         cutoff = 0
         for cn in self.dircache:
-            if now - cn.ts > self.n_dircache:
-                cutoff += 1
-            else:
+            if now - cn.ts <= self.t_dircache:
                 break
+            cutoff += 1
 
         if cutoff > 0:
             self.dircache = self.dircache[cutoff:]
+        elif len(self.dircache) > self.n_dircache:
+            self.dircache.pop(0)
 
     def get_cached_dir(self, dirpath):
         with self.dircache_mtx:
-            self.clean_dircache()
             for cn in self.dircache:
                 if cn.tag == dirpath:
-                    return cn
-
+                    if time.time() - cn.ts <= self.t_dircache:
+                        return cn
+                    break
         return None
 
+    # !rm.yes>
     """
             ,-------------------------------,  g1>=c1, g2<=c2
             |cache1                   cache2|  buf[g1-c1:(g1-c1)+(g2-g1)]
@@ -560,12 +716,14 @@ class CPPF(Operations):
                                     |get1       get2|
                                     `---------------'
     """
+    # !rm.no>
 
     def get_cached_file(self, path, get1, get2, file_sz):
         car = None
         cdr = None
         ncn = -1
-        dbg("cache request {}:{} |{}|".format(get1, get2, file_sz) + self._describe())
+        if is_dbg:
+            dbg("cache request %d:%d |%d|%s", get1, get2, file_sz, self._describe())
         with self.filecache_mtx:
             for cn in self.filecache:
                 ncn += 1
@@ -592,15 +750,14 @@ class CPPF(Operations):
                     buf_ofs = get1 - cache1
                     buf_end = buf_ofs + (get2 - get1)
                     dbg(
-                        "found all (#{} {}:{} |{}|) [{}:{}] = {}".format(
-                            ncn,
-                            cache1,
-                            cache2,
-                            len(cn.data),
-                            buf_ofs,
-                            buf_end,
-                            buf_end - buf_ofs,
-                        )
+                        "found all (#%d %d:%d |%d|) [%d:%d] = %d",
+                        ncn,
+                        cache1,
+                        cache2,
+                        len(cn.data),
+                        buf_ofs,
+                        buf_end,
+                        buf_end - buf_ofs,
                     )
                     return cn.data[buf_ofs:buf_end]
 
@@ -608,16 +765,15 @@ class CPPF(Operations):
                     x = cn.data[: get2 - cache1]
                     if not cdr or len(cdr) < len(x):
                         dbg(
-                            "found cdr (#{} {}:{} |{}|) [:{}-{}] = [:{}] = {}".format(
-                                ncn,
-                                cache1,
-                                cache2,
-                                len(cn.data),
-                                get2,
-                                cache1,
-                                get2 - cache1,
-                                len(x),
-                            )
+                            "found cdr (#%d %d:%d |%d|) [:%d-%d] = [:%d] = %d",
+                            ncn,
+                            cache1,
+                            cache2,
+                            len(cn.data),
+                            get2,
+                            cache1,
+                            get2 - cache1,
+                            len(x),
                         )
                         cdr = x
 
@@ -627,22 +783,21 @@ class CPPF(Operations):
                     x = cn.data[-(max(0, cache2 - get1)) :]
                     if not car or len(car) < len(x):
                         dbg(
-                            "found car (#{} {}:{} |{}|) [-({}-{}):] = [-{}:] = {}".format(
-                                ncn,
-                                cache1,
-                                cache2,
-                                len(cn.data),
-                                cache2,
-                                get1,
-                                cache2 - get1,
-                                len(x),
-                            )
+                            "found car (#%d %d:%d |%d|) [-(%d-%d):] = [-%d:] = %d",
+                            ncn,
+                            cache1,
+                            cache2,
+                            len(cn.data),
+                            cache2,
+                            get1,
+                            cache2 - get1,
+                            len(x),
                         )
                         car = x
 
                     continue
 
-                msg = "cache fallthrough\n{} {} {}\n{} {} {}\n{} {} --\n".format(
+                msg = "cache fallthrough\n%d %d %d\n%d %d %d\n%d %d --\n%s" % (
                     get1,
                     get2,
                     get2 - get1,
@@ -651,9 +806,10 @@ class CPPF(Operations):
                     cache2 - cache1,
                     get1 - cache1,
                     get2 - cache2,
+                    self._describe(),
                 )
-                msg += self._describe()
-                raise Exception(msg)
+                info(msg)
+                raise FuseOSError(errno.EIO)
 
         if car and cdr and len(car) + len(cdr) == get2 - get1:
             dbg("<cache> have both")
@@ -661,62 +817,61 @@ class CPPF(Operations):
 
         elif cdr and (not car or len(car) < len(cdr)):
             h_end = get1 + (get2 - get1) - len(cdr)
-            h_ofs = min(get1, h_end - 512 * 1024)
+            h_ofs = min(get1, h_end - 0x80000)  # 512k
 
             if h_ofs < 0:
                 h_ofs = 0
 
             buf_ofs = get1 - h_ofs
 
-            dbg(
-                "<cache> cdr {}, car {}:{} |{}| [{}:]".format(
-                    len(cdr), h_ofs, h_end, h_end - h_ofs, buf_ofs
-                )
-            )
+            if dbg:
+                t = "<cache> cdr %d, car %d:%d |%d| [%d:]"
+                dbg(t, len(cdr), h_ofs, h_end, h_end - h_ofs, buf_ofs)
 
             buf = self.gw.download_file_range(path, h_ofs, h_end)
             if len(buf) == h_end - h_ofs:
                 ret = buf[buf_ofs:] + cdr
             else:
                 ret = buf[get1 - h_ofs :]
-                info(
-                    "remote truncated {}:{} to |{}|, will return |{}|".format(
-                        h_ofs, h_end, len(buf), len(ret)
-                    )
-                )
+                t = "remote truncated %d:%d to |%d|, will return |%d|"
+                info(t, h_ofs, h_end, len(buf), len(ret))
 
         elif car:
             h_ofs = get1 + len(car)
-            h_end = max(get2, h_ofs + 1024 * 1024)
+            if get2 < 0x100000:
+                # already cached from 0 to 64k, now do ~64k plus 1 MiB
+                h_end = max(get2, h_ofs + 0x100000)  # 1m
+            else:
+                # after 1 MiB, bump window to 8 MiB
+                h_end = max(get2, h_ofs + 0x800000)  # 8m
 
             if h_end > file_sz:
                 h_end = file_sz
 
             buf_ofs = (get2 - get1) - len(car)
 
-            dbg(
-                "<cache> car {}, cdr {}:{} |{}| [:{}]".format(
-                    len(car), h_ofs, h_end, h_end - h_ofs, buf_ofs
-                )
-            )
+            t = "<cache> car %d, cdr %d:%d |%d| [:%d]"
+            dbg(t, len(car), h_ofs, h_end, h_end - h_ofs, buf_ofs)
 
             buf = self.gw.download_file_range(path, h_ofs, h_end)
             ret = car + buf[:buf_ofs]
 
         else:
-            if get2 - get1 <= 1024 * 1024:
+            if get2 - get1 < 0x500000:  # 5m
                 # unless the request is for the last n bytes of the file,
                 # grow the start to cache some stuff around the range
                 if get2 < file_sz - 1:
-                    h_ofs = get1 - 1024 * 256
+                    h_ofs = get1 - 0x40000  # 256k
                 else:
-                    h_ofs = get1 - 1024 * 32
+                    h_ofs = get1 - 0x10000  # 64k
 
                 # likewise grow the end unless start is 0
-                if get1 > 0:
-                    h_end = get2 + 1024 * 1024
+                if get1 >= 0x100000:
+                    h_end = get2 + 0x400000  # 4m
+                elif get1 > 0:
+                    h_end = get2 + 0x100000  # 1m
                 else:
-                    h_end = get2 + 1024 * 64
+                    h_end = get2 + 0x10000  # 64k
             else:
                 # big enough, doesn't need pads
                 h_ofs = get1
@@ -731,11 +886,8 @@ class CPPF(Operations):
             buf_ofs = get1 - h_ofs
             buf_end = buf_ofs + get2 - get1
 
-            dbg(
-                "<cache> {}:{} |{}| [{}:{}]".format(
-                    h_ofs, h_end, h_end - h_ofs, buf_ofs, buf_end
-                )
-            )
+            t = "<cache> %d:%d |%d| [%d:%d]"
+            dbg(t, h_ofs, h_end, h_end - h_ofs, buf_ofs, buf_end)
 
             buf = self.gw.download_file_range(path, h_ofs, h_end)
             ret = buf[buf_ofs:buf_end]
@@ -750,9 +902,7 @@ class CPPF(Operations):
         return ret
 
     def _readdir(self, path, fh=None):
-        path = path.strip("/")
-        log("readdir [{}] [{}]".format(hexler(path), fh))
-
+        dbg("dircache miss")
         ret = self.gw.listdir(path)
         if not self.n_dircache:
             return ret
@@ -762,31 +912,34 @@ class CPPF(Operations):
             self.dircache.append(cn)
             self.clean_dircache()
 
-        # import pprint; pprint.pprint(ret)
         return ret
 
     def readdir(self, path, fh=None):
-        return [".", ".."] + self._readdir(path, fh)
+        dbg("readdir %r [%s]", path, fh)
+        path = path.strip("/")
+        cn = self.get_cached_dir(path)
+        if cn:
+            ret = cn.data
+        else:
+            ret = self._readdir(path, fh)
+        return [".", ".."] + list(ret)
 
     def read(self, path, length, offset, fh=None):
         req_max = 1024 * 1024 * 8
         cache_max = 1024 * 1024 * 2
         if length > req_max:
             # windows actually doing 240 MiB read calls, sausage
-            info("truncate |{}| to {}MiB".format(length, req_max >> 20))
+            info("truncate |%d| to %dMiB", length, req_max >> 20)
             length = req_max
 
         path = path.strip("/")
         ofs2 = offset + length
         file_sz = self.getattr(path)["st_size"]
-        log(
-            "read {} |{}| {}:{} max {}".format(
-                hexler(path), length, offset, ofs2, file_sz
-            )
-        )
+        dbg("read %r |%d| %d:%d max %d", path, length, offset, ofs2, file_sz)
+
         if ofs2 > file_sz:
             ofs2 = file_sz
-            log("truncate to |{}| :{}".format(ofs2 - offset, ofs2))
+            dbg("truncate to |%d| :%d", ofs2 - offset, ofs2)
 
         if file_sz == 0 or offset >= ofs2:
             return b""
@@ -798,6 +951,7 @@ class CPPF(Operations):
 
         return ret
 
+        # !rm.yes>
         fn = "cppf-{}-{}-{}".format(time.time(), offset, length)
         if False:
             with open(fn, "wb", len(ret)) as f:
@@ -820,51 +974,43 @@ class CPPF(Operations):
                 raise Exception("cache bork")
 
         return ret
+        # !rm.no>
 
     def getattr(self, path, fh=None):
-        log("getattr [{}]".format(hexler(path)))
+        dbg("getattr %r", path)
         if WINDOWS:
             path = enwin(path)  # windows occasionally decodes f0xx to xx
 
         path = path.strip("/")
+        if not path:
+            ret = self.gw.stat_dir(time.time(), 4096)
+            dbg("/=%r", ret)
+            return ret
+
         try:
             dirpath, fname = path.rsplit("/", 1)
         except:
             dirpath = ""
             fname = path
 
-        if not path:
-            ret = self.gw.stat_dir(time.time())
-            # dbg("=" + repr(ret))
-            return ret
-
         cn = self.get_cached_dir(dirpath)
         if cn:
-            log("cache ok")
             dents = cn.data
         else:
-            dbg("cache miss")
             dents = self._readdir(dirpath)
 
-        for cache_name, cache_stat, _ in dents:
-            # if "qw" in cache_name and "qw" in fname:
-            #     info(
-            #         "cmp\n  [{}]\n  [{}]\n\n{}\n".format(
-            #             hexler(cache_name),
-            #             hexler(fname),
-            #             "\n".join(traceback.format_stack()[:-1]),
-            #         )
-            #     )
-
-            if cache_name == fname:
-                # dbg("=" + repr(cache_stat))
-                return cache_stat
+        try:
+            ret = dents[fname]
+            dbg("s=%r", ret)
+            return ret
+        except:
+            pass
 
         fun = info
         if MACOS and path.split("/")[-1].startswith("._"):
             fun = dbg
 
-        fun("=ENOENT ({})".format(hexler(path)))
+        fun("=ENOENT %r", path)
         raise FuseOSError(errno.ENOENT)
 
     access = None
@@ -877,43 +1023,46 @@ class CPPF(Operations):
     releasedir = None
     statfs = None
 
+    # !rm.yes>
     if False:
         # incorrect semantics but good for debugging stuff like samba and msys2
         def access(self, path, mode):
-            log("@@ access [{}] [{}]".format(path, mode))
+            dbg("@@ access [{}] [{}]".format(path, mode))
             return 1 if self.getattr(path) else 0
 
         def flush(self, path, fh):
-            log("@@ flush [{}] [{}]".format(path, fh))
+            dbg("@@ flush [{}] [{}]".format(path, fh))
             return True
 
         def getxattr(self, *args):
-            log("@@ getxattr [{}]".format("] [".join(str(x) for x in args)))
+            dbg("@@ getxattr [{}]".format("] [".join(str(x) for x in args)))
             return False
 
         def listxattr(self, *args):
-            log("@@ listxattr [{}]".format("] [".join(str(x) for x in args)))
+            dbg("@@ listxattr [{}]".format("] [".join(str(x) for x in args)))
             return False
 
         def open(self, path, flags):
-            log("@@ open [{}] [{}]".format(path, flags))
+            dbg("@@ open [{}] [{}]".format(path, flags))
             return 42
 
         def opendir(self, fh):
-            log("@@ opendir [{}]".format(fh))
+            dbg("@@ opendir [{}]".format(fh))
             return 69
 
         def release(self, ino, fi):
-            log("@@ release [{}] [{}]".format(ino, fi))
+            dbg("@@ release [{}] [{}]".format(ino, fi))
             return True
 
         def releasedir(self, ino, fi):
-            log("@@ releasedir [{}] [{}]".format(ino, fi))
+            dbg("@@ releasedir [{}] [{}]".format(ino, fi))
             return True
 
         def statfs(self, path):
-            log("@@ statfs [{}]".format(path))
+            dbg("@@ statfs [{}]".format(path))
             return {}
+
+    # !rm.no>
 
     if sys.platform == "win32":
         # quick compat for /mingw64/bin/python3 (msys2)
@@ -930,28 +1079,28 @@ class CPPF(Operations):
                 return self.junk_fh_ctr
 
             except Exception as ex:
-                log("open ERR {}".format(repr(ex)))
+                info("open ERR %r", ex)
                 raise FuseOSError(errno.ENOENT)
 
         def open(self, path, flags):
-            dbg("open [{}] [{}]".format(hexler(path), flags))
+            dbg("open %r [%s]", path, flags)
             return self._open(path)
 
         def opendir(self, path):
-            dbg("opendir [{}]".format(hexler(path)))
+            dbg("opendir %r", path)
             return self._open(path)
 
         def flush(self, path, fh):
-            dbg("flush [{}] [{}]".format(hexler(path), fh))
+            dbg("flush %r [%s]", path, fh)
 
         def release(self, ino, fi):
-            dbg("release [{}] [{}]".format(hexler(ino), fi))
+            dbg("release %r [%s]", ino, fi)
 
         def releasedir(self, ino, fi):
-            dbg("releasedir [{}] [{}]".format(hexler(ino), fi))
+            dbg("releasedir %r [%s]", ino, fi)
 
         def access(self, path, mode):
-            dbg("access [{}] [{}]".format(hexler(path), mode))
+            dbg("access %r [%s]", path, mode)
             try:
                 x = self.getattr(path)
                 if x["st_mode"] <= 0:
@@ -967,19 +1116,24 @@ class TheArgparseFormatter(
 
 
 def main():
-    global info, log, dbg
+    global info, dbg, is_dbg
     time.strptime("19970815", "%Y%m%d")  # python#7980
 
+    ver = "{0}, v{1}".format(S_BUILD_DT, S_VERSION)
+    if "--version" in sys.argv:
+        print("partyfuse", ver)
+        return
+
     # filecache helps for reads that are ~64k or smaller;
-    #   linux generally does 128k so the cache is a slowdown,
-    #   windows likes to use 4k and 64k so cache is required,
-    #   value is numChunks (1~3M each) to keep in the cache
-    nf = 24
+    #   windows likes to use 4k and 64k so cache is important,
+    #   linux generally does 128k so the cache is still nice,
+    #   value is numChunks (1~8M each) to keep in the cache
+    nf = 12
 
     # dircache is always a boost,
     #   only want to disable it for tests etc,
-    #   value is numSec until an entry goes stale
-    nd = 1
+    cdn = 24  # max num dirs; keep larger than max dir depth; 0=disable
+    cds = 1  # numsec until an entry goes stale
 
     where = "local directory"
     if WINDOWS:
@@ -990,41 +1144,63 @@ def main():
     if WINDOWS:
         examples.append("http://192.168.1.69:3923/music/  M:")
 
+    epi = "example:" + ex_pre + ex_pre.join(examples)
+    epi += """\n
+NOTE: if server has --usernames enabled, then password is "username:password"
+"""
+
     ap = argparse.ArgumentParser(
         formatter_class=TheArgparseFormatter,
-        epilog="example:" + ex_pre + ex_pre.join(examples),
+        description="mount a copyparty server as a local filesystem -- " + ver,
+        epilog=epi,
     )
-    ap.add_argument(
-        "-cd", metavar="NUM_SECONDS", type=float, default=nd, help="directory cache"
-    )
-    ap.add_argument(
-        "-cf", metavar="NUM_BLOCKS", type=int, default=nf, help="file cache"
-    )
-    ap.add_argument("-a", metavar="PASSWORD", help="password or $filepath")
-    ap.add_argument("-d", action="store_true", help="enable debug")
-    ap.add_argument("-te", metavar="PEM_FILE", help="certificate to expect/verify")
-    ap.add_argument("-td", action="store_true", help="disable certificate check")
+    # fmt: off
     ap.add_argument("base_url", type=str, help="remote copyparty URL to mount")
     ap.add_argument("local_path", type=str, help=where + " to mount it on")
+    ap.add_argument("-a", metavar="PASSWORD", help="password or $filepath")
+
+    # !rm.yes>
+    ap.add_argument("--html", metavar="TYPE", default="", help="which HTML parser to use; cpp, nginx, iis")
+    # !rm.no>
+
+    ap2 = ap.add_argument_group("https/TLS")
+    ap2.add_argument("-te", metavar="PEMFILE", help="certificate to expect/verify")
+    ap2.add_argument("-td", action="store_true", help="disable certificate check")
+
+    ap2 = ap.add_argument_group("cache/perf")
+    ap2.add_argument("-cdn", metavar="DIRS", type=float, default=cdn, help="directory-cache, max num dirs; 0=disable")
+    ap2.add_argument("-cds", metavar="SECS", type=float, default=cds, help="directory-cache, expiration time")
+    ap2.add_argument("-cf", metavar="BLOCKS", type=int, default=nf, help="file cache; each block is <= 1 MiB")
+
+    ap2 = ap.add_argument_group("logging")
+    ap2.add_argument("-q", action="store_true", help="quiet")
+    ap2.add_argument("-d", action="store_true", help="debug/verbose")
+    ap2.add_argument("--slowterm", action="store_true", help="only most recent msgs; good for windows")
+    ap2.add_argument("--logf", metavar="FILE", type=str, default="", help="log to FILE; enables --slowterm")
+
+    ap2 = ap.add_argument_group("fuse")
+    ap2.add_argument("--oth", action="store_true", help="tell FUSE to '-o allow_other'")
+    ap2.add_argument("--nonempty", action="store_true", help="tell FUSE to '-o nonempty'")
+
     ar = ap.parse_args()
+    # fmt: on
 
+    if ar.logf:
+        ar.slowterm = True
+
+    # windows terminals are slow (cmd.exe, mintty)
+    # otoh fancy_log beats RecentLog on linux
+    logger = RecentLog(ar).put if ar.slowterm else fancy_log
     if ar.d:
-        # windows terminals are slow (cmd.exe, mintty)
-        # otoh fancy_log beats RecentLog on linux
-        logger = RecentLog().put if WINDOWS else fancy_log
-
         info = logger
-        log = logger
         dbg = logger
-    else:
-        # debug=off, speed is dontcare
-        info = fancy_log
-        log = null_log
-        dbg = null_log
+        is_dbg = True
+    elif not ar.q:
+        info = logger
 
     if ar.a and ar.a.startswith("$"):
         fn = ar.a[1:]
-        log("reading password from file [{}]".format(fn))
+        info("reading password from file %r", fn)
         with open(fn, "rb") as f:
             ar.a = f.read().decode("utf-8").strip()
 
@@ -1045,14 +1221,10 @@ def main():
 
     register_wtf8()
 
-    try:
-        with open("/etc/fuse.conf", "rb") as f:
-            allow_other = b"\nuser_allow_other" in f.read()
-    except:
-        allow_other = WINDOWS or MACOS
-
-    args = {"foreground": True, "nothreads": True, "allow_other": allow_other}
-    if not MACOS:
+    args = {"foreground": True, "nothreads": True}
+    if ar.oth:
+        args["allow_other"] = True
+    if ar.nonempty:
         args["nonempty"] = True
 
     FUSE(CPPF(ar), ar.local_path, encoding="wtf-8", **args)

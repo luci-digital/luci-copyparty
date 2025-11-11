@@ -4,6 +4,16 @@
 function hex2u8(txt) {
     return new Uint8Array(txt.match(/.{2}/g).map(function (b) { return parseInt(b, 16); }));
 }
+function esc(txt) {
+    return txt.replace(/[&"<>]/g, function (c) {
+        return {
+            '&': '&amp;',
+            '"': '&quot;',
+            '<': '&lt;',
+            '>': '&gt;'
+        }[c];
+    });
+}
 
 
 var subtle = null;
@@ -19,7 +29,10 @@ catch (ex) {
 }
 function load_fb() {
     subtle = null;
+    if (self.hashwasm)
+        return;
     importScripts('deps/sha512.hw.js');
+    console.log('using fallback hasher');
 }
 
 
@@ -29,6 +42,12 @@ var reader = null,
 
 
 onmessage = (d) => {
+    if (d.data == 'nosubtle')
+        return load_fb();
+
+    if (d.data == 'ping')
+        return postMessage(['pong']);
+
     if (busy)
         return postMessage(["panic", 'worker got another task while busy']);
 
@@ -57,7 +76,7 @@ onmessage = (d) => {
     };
     reader.onerror = function () {
         busy = false;
-        var err = reader.error + '';
+        var err = esc('' + reader.error);
 
         if (err.indexOf('NotReadableError') !== -1 || // win10-chrome defender
             err.indexOf('NotFoundError') !== -1  // macos-firefox permissions

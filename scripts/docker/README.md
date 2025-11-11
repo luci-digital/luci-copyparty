@@ -22,16 +22,24 @@ this example is also available as a podman-compatible [docker-compose yaml](http
 i'm not very familiar with containers, so let me know if this section could be better 🙏
 
 
+## portainer
+
+* there is a [portainer howto](https://github.com/9001/copyparty/blob/hovudstraum/docs/examples/docker/portainer.md) which is mostly untested
+
+
 ## configuration
 
 > this section basically explains how the [docker-compose yaml](https://github.com/9001/copyparty/blob/hovudstraum/docs/examples/docker/basic-docker-compose) works, so you may look there instead
 
 the container has the same default config as the sfx and the pypi module, meaning it will listen on port 3923 and share the "current folder" (`/w` inside the container) as read-write for anyone
 
-the recommended way to configure copyparty inside a container is to mount a folder which has one or more [config files](https://github.com/9001/copyparty/blob/hovudstraum/docs/example.conf) inside; `-v /your/config/folder:/cfg`
+the recommended way to configure copyparty inside a container is to mount a folder which has one or more [config files](https://github.com/9001/copyparty/blob/hovudstraum/docs/examples/docker/basic-docker-compose/copyparty.conf) inside; `-v /your/config/folder:/cfg`
 
 * but you can also provide arguments to the docker command if you prefer that
 * config files must be named `something.conf` to get picked up
+* there are [more extensive config examples](https://github.com/9001/copyparty/blob/hovudstraum/docs/example.conf) but those are not made for docker so the paths are wrong (`/home/ed/Music` should be `/w/something` and so on)
+
+also see [docker-specific recommendations](#docker-specific-recommendations)
 
 
 ## editions
@@ -49,6 +57,8 @@ with image size after installation and when gzipped
 most editions support `x86`, `x86_64`, `armhf`, `aarch64`, `ppc64le`, `s390x`
 * `dj` doesn't run on `ppc64le`, `s390x`, `armhf`
 * `iv` doesn't run on `ppc64le`, `s390x`
+
+> NOTE: the following editions are unfinished experiments, and not published anywhere: djd djf djff dju
 
 
 ## detecting bpm and musical key
@@ -77,6 +87,43 @@ or using commandline arguments,
 ```
 -e2dsa -e2ts -mtp .bpm=f,t30,/mtag/audio-bpm.py -mtp key=f,t190,/mtag/audio-key.py
 ```
+
+
+# faq
+
+the following advice is best-effort and not guaranteed to be entirely correct
+
+* q: starting a rootless container on debian 12 fails with `failed to register layer: lsetxattr user.overlay.impure /etc: operation not supported`
+  * a: docker's default rootless configuration on debian is to use the overlay2 storage driver; this does not work. Your options are to replace docker with podman (good choice), or to configure docker to use the `fuse-overlayfs` storage driver
+
+
+
+# docker-specific recommendations
+
+* copyparty will generally create a `.hist` folder at the top of each volume, which contains the filesystem index, thumbnails and such. For performance reasons, but also just to keep things tidy, it might be convenient to store these inside the config folder instead. Add the line `hist: /cfg/hists/` inside the `[global]` section of your `copyparty.conf` to do this
+
+* if you want more performance, and you're OK with doubling the RAM usage, then consider enabling mimalloc **(maybe buggy)** with one of these:
+
+  * `-e LD_PRELOAD=/usr/lib/libmimalloc-secure.so.2` makes download-as-zip **3x** as fast, filesystem-indexing **1.5x** as fast, etc.
+
+  * `-e LD_PRELOAD=/usr/lib/libmimalloc-insecure.so.2` adds another 10% speed but makes it easier to exploit future vulnerabilities
+
+  * complete example: `podman run --rm -it -p 3923:3923 -v "$PWD:/w:z" -e LD_PRELOAD=/usr/lib/libmimalloc-secure.so.2 copyparty/ac -v /w::r`
+
+
+## enabling the ftp server
+
+...is tricky because ftp is a weird protocol and docker is making it worse 🎉
+
+add the following three config entries into the `[global]` section of your `copyparty.conf`:
+
+* `ftp: 3921` to enable the service, listening for connections on port 3921
+
+* `ftp-nat: 127.0.0.1` but replace `127.0.0.1` with the actual external IP of your server; the clients will only be able to connect to this IP, even if the server has multiple IPs
+
+* `ftp-pr: 12000-12099` to restrict the [passive-mode](http://slacksite.com/other/ftp.html#passive) port selection range; this allows up to 100 simultaneous file transfers
+
+then finally update your docker config so that the port-range you specified (12000-12099) is exposed to the internet
 
 
 # build the images yourself

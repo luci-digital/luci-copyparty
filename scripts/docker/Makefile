@@ -28,6 +28,14 @@ all:
 
 	docker image ls
 
+min:
+	rm -rf i
+	mkdir i
+	tar -cC../.. dist/copyparty-sfx.py bin/mtag | tar -xvCi
+
+	podman build --squash --pull=always -t copyparty/min:latest -f Dockerfile.min .
+	echo 'scale=1;'`podman save copyparty/min:latest | pigz -c | wc -c`/1024/1024 | bc
+
 push:
 	docker push copyparty/min
 	docker push copyparty/im

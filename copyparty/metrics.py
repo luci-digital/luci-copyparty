@@ -18,7 +18,7 @@ class Metrics(object):
 
     def tx(self, cli: "HttpCli") -> bool:
         if not cli.avol:
-            raise Pebkac(403, "not allowed for user " + cli.uname)
+            raise Pebkac(403, "'stats' not allowed for user " + cli.uname)
 
         args = cli.args
         if not args.stats:
@@ -72,6 +72,9 @@ class Metrics(object):
         v = "{:.3f}".format(self.hsrv.t0)
         addug("cpp_boot_unixtime", "seconds", v, t)
 
+        t = "number of active downloads"
+        addg("cpp_active_dl", str(len(self.hsrv.tdls)), t)
+
         t = "number of open http(s) client connections"
         addg("cpp_http_conns", str(self.hsrv.ncli), t)
 
@@ -88,7 +91,7 @@ class Metrics(object):
         addg("cpp_total_bans", str(self.hsrv.nban), t)
 
         if not args.nos_vst:
-            x = self.hsrv.broker.ask("up2k.get_state")
+            x = self.hsrv.broker.ask("up2k.get_state", True, "")
             vs = json.loads(x.get())
 
             nvidle = 0
@@ -128,7 +131,7 @@ class Metrics(object):
             addbh("cpp_disk_size_bytes", "total HDD size of volume")
             addbh("cpp_disk_free_bytes", "free HDD space in volume")
             for vpath, vol in allvols:
-                free, total = get_df(vol.realpath)
+                free, total, _ = get_df(vol.realpath, False)
                 if free is None or total is None:
                     continue
 
@@ -179,7 +182,7 @@ class Metrics(object):
             tnbytes = 0
             tnfiles = 0
             for vpath, vol in allvols:
-                cur = idx.get_cur(vol.realpath)
+                cur = idx.get_cur(vol)
                 if not cur:
                     continue
 
@@ -206,6 +209,9 @@ class Metrics(object):
             try:
                 x = self.hsrv.broker.ask("up2k.get_unfinished")
                 xs = x.get()
+                if not xs:
+                    raise Exception("up2k mutex acquisition timed out")
+
                 xj = json.loads(xs)
                 for ptop, (nbytes, nfiles) in xj.items():
                     tnbytes += nbytes

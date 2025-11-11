@@ -12,6 +12,7 @@ copyparty.egg-info/
 /dist/
 /py2/
 /sfx*
+/pyz/
 /unt/
 /log/
 
@@ -29,6 +30,7 @@ copyparty/res/COPYING.txt
 copyparty/web/deps/
 srv/
 scripts/docker/i/
+scripts/deps-docker/uncomment.py
 contrib/package/arch/pkg/
 contrib/package/arch/src/
 
@@ -41,3 +43,6 @@ scripts/docker/*.err
 
 # nix build output link
 result
+
+# IDEA config
+.idea/

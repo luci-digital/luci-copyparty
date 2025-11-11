@@ -11,7 +11,8 @@ import queue
 
 from .__init__ import ANYWIN
 from .authsrv import AuthSrv
-from .broker_util import BrokerCli, ExceptionalQueue
+from .broker_util import BrokerCli, ExceptionalQueue, NotExQueue
+from .fsutil import ramdisk_chk
 from .httpsrv import HttpSrv
 from .util import FAKE_MP, Daemon, HMaccas
 
@@ -56,6 +57,7 @@ class MpWorker(BrokerCli):
 
         # starting to look like a good idea
         self.asrv = AuthSrv(args, None, False)
+        ramdisk_chk(self.asrv)
 
         # instantiate all services here (TODO: inheritance?)
         self.iphash = HMaccas(os.path.join(self.args.E.cfg, "iphash"), 8)
@@ -82,35 +84,41 @@ class MpWorker(BrokerCli):
         while True:
             retq_id, dest, args = self.q_pend.get()
 
-            # self.logw("work: [{}]".format(d[0]))
+            if dest == "retq":
+                # response from previous ipc call
+                with self.retpend_mutex:
+                    retq = self.retpend.pop(retq_id)
+
+                retq.put(args)
+                continue
+
             if dest == "shutdown":
                 self.httpsrv.shutdown()
                 self.logw("ok bye")
                 sys.exit(0)
                 return
 
-            elif dest == "reload":
+            if dest == "reload":
                 self.logw("mpw.asrv reloading")
                 self.asrv.reload()
+                ramdisk_chk(self.asrv)
                 self.logw("mpw.asrv reloaded")
+                continue
 
-            elif dest == "listen":
-                self.httpsrv.listen(args[0], args[1])
+            if dest == "reload_sessions":
+                with self.asrv.mutex:
+                    self.asrv.load_sessions()
+                continue
 
-            elif dest == "set_netdevs":
-                self.httpsrv.set_netdevs(args[0])
+            obj = self
+            for node in dest.split("."):
+                obj = getattr(obj, node)
 
-            elif dest == "retq":
-                # response from previous ipc call
-                with self.retpend_mutex:
-                    retq = self.retpend.pop(retq_id)
+            rv = obj(*args)  # type: ignore
+            if retq_id:
+                self.say("retq", rv, retq_id=retq_id)
 
-                retq.put(args)
-
-            else:
-                raise Exception("what is " + str(dest))
-
-    def ask(self, dest: str, *args: Any) -> ExceptionalQueue:
+    def ask(self, dest: str, *args: Any) -> Union[ExceptionalQueue, NotExQueue]:
         retq = ExceptionalQueue(1)
         retq_id = id(retq)
         with self.retpend_mutex:
@@ -119,5 +127,5 @@ class MpWorker(BrokerCli):
         self.q_yield.put((retq_id, dest, list(args)))
         return retq
 
-    def say(self, dest: str, *args: Any) -> None:
-        self.q_yield.put((0, dest, list(args)))
+    def say(self, dest: str, *args: Any, retq_id=0) -> None:
+        self.q_yield.put((retq_id, dest, list(args)))

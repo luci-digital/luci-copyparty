@@ -6,9 +6,10 @@ import tempfile
 from datetime import datetime
 
 from .__init__ import CORES
+from .authsrv import VFS, AuthSrv
 from .bos import bos
 from .th_cli import ThumbCli
-from .util import UTC, vjoin
+from .util import UTC, vjoin, vol_san
 
 if True:  # pylint: disable=using-constant-test
     from typing import Any, Generator, Optional
@@ -16,14 +17,20 @@ if True:  # pylint: disable=using-constant-test
     from .util import NamedLogger
 
 
+TAR_NO_OPUS = set("aac|m4a|mp3|oga|ogg|opus|wma".split("|"))
+
+
 class StreamArc(object):
     def __init__(
         self,
         log: "NamedLogger",
+        asrv: AuthSrv,
         fgen: Generator[dict[str, Any], None, None],
         **kwargs: Any
     ):
         self.log = log
+        self.asrv = asrv
+        self.args = asrv.args
         self.fgen = fgen
         self.stopped = False
 
@@ -78,7 +85,7 @@ def enthumb(
 ) -> dict[str, Any]:
     rem = f["vp"]
     ext = rem.rsplit(".", 1)[-1].lower()
-    if fmt == "opus" and ext in "aac|m4a|mp3|ogg|opus|wma".split("|"):
+    if (fmt == "mp3" and ext == "mp3") or (fmt == "opus" and ext in TAR_NO_OPUS):
         raise Exception()
 
     vp = vjoin(vtop, rem.split("/", 1)[1])
@@ -98,15 +105,20 @@ def enthumb(
     return f
 
 
-def errdesc(errors: list[tuple[str, str]]) -> tuple[dict[str, Any], list[str]]:
+def errdesc(
+    vfs: VFS, errors: list[tuple[str, str]]
+) -> tuple[dict[str, Any], list[str]]:
     report = ["copyparty failed to add the following files to the archive:", ""]
 
     for fn, err in errors:
-        report.extend([" file: {}".format(fn), "error: {}".format(err), ""])
+        report.extend([" file: %r" % (fn,), "error: %s" % (err,), ""])
+
+    btxt = "\r\n".join(report).encode("utf-8", "replace")
+    btxt = vol_san(list(vfs.all_vols.values()), btxt)
 
     with tempfile.NamedTemporaryFile(prefix="copyparty-", delete=False) as tf:
         tf_path = tf.name
-        tf.write("\r\n".join(report).encode("utf-8", "replace"))
+        tf.write(btxt)
 
     dt = datetime.now(UTC).strftime("%Y-%m%d-%H%M%S")
 

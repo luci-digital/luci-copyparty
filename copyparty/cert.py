@@ -1,17 +1,22 @@
 import calendar
 import errno
-import filecmp
 import json
 import os
-import shutil
 import time
 
-from .util import Netdev, runcmd
+from .__init__ import ANYWIN
+from .util import Netdev, atomic_move, load_resource, runcmd, wunlink
 
-HAVE_CFSSL = True
+HAVE_CFSSL = not os.environ.get("PRTY_NO_CFSSL")
 
 if True:  # pylint: disable=using-constant-test
-    from .util import RootLogger
+    from .util import NamedLogger, RootLogger
+
+
+if ANYWIN:
+    VF = {"mv_re_t": 5, "rm_re_t": 5, "mv_re_r": 0.1, "rm_re_r": 0.1}
+else:
+    VF = {"mv_re_t": 0, "rm_re_t": 0}
 
 
 def ensure_cert(log: "RootLogger", args) -> None:
@@ -22,13 +27,15 @@ def ensure_cert(log: "RootLogger", args) -> None:
 
     i feel awful about this and so should they
     """
-    cert_insec = os.path.join(args.E.mod, "res/insecure.pem")
+    with load_resource(args.E, "res/insecure.pem") as f:
+        cert_insec = f.read()
     cert_appdata = os.path.join(args.E.cfg, "cert.pem")
     if not os.path.isfile(args.cert):
         if cert_appdata != args.cert:
             raise Exception("certificate file does not exist: " + args.cert)
 
-        shutil.copy(cert_insec, args.cert)
+        with open(args.cert, "wb") as f:
+            f.write(cert_insec)
 
     with open(args.cert, "rb") as f:
         buf = f.read()
@@ -43,7 +50,9 @@ def ensure_cert(log: "RootLogger", args) -> None:
             raise Exception(m + "private key must appear before server certificate")
 
     try:
-        if filecmp.cmp(args.cert, cert_insec):
+        with open(args.cert, "rb") as f:
+            active_cert = f.read()
+        if active_cert == cert_insec:
             t = "using default TLS certificate; https will be insecure:\033[36m {}"
             log("cert", t.format(args.cert), 3)
     except:
@@ -76,6 +85,8 @@ def _read_crt(args, fn):
 
 
 def _gen_ca(log: "RootLogger", args):
+    nlog: "NamedLogger" = lambda msg, c=0: log("cert-gen-ca", msg, c)
+
     expiry = _read_crt(args, "ca.pem")[0]
     if time.time() + args.crt_cdays * 60 * 60 * 24 * 0.1 < expiry:
         return
@@ -105,14 +116,21 @@ def _gen_ca(log: "RootLogger", args):
         raise Exception("failed to translate ca-cert: {}, {}".format(rc, se), 3)
 
     bname = os.path.join(args.crt_dir, "ca")
-    os.rename(bname + "-key.pem", bname + ".key")
-    os.unlink(bname + ".csr")
+    try:
+        wunlink(nlog, bname + ".key", VF)
+    except:
+        pass
+    atomic_move(nlog, bname + "-key.pem", bname + ".key", VF)
+    wunlink(nlog, bname + ".csr", VF)
 
     log("cert", "new ca OK", 2)
 
 
 def _gen_srv(log: "RootLogger", args, netdevs: dict[str, Netdev]):
+    nlog: "NamedLogger" = lambda msg, c=0: log("cert-gen-srv", msg, c)
+
     names = args.crt_ns.split(",") if args.crt_ns else []
+    names = [x.strip() for x in names]
     if not args.crt_exact:
         for n in names[:]:
             names.append("*.{}".format(n))
@@ -136,14 +154,22 @@ def _gen_srv(log: "RootLogger", args, netdevs: dict[str, Netdev]):
             raise Exception("no useable cert found")
 
         expired = time.time() + args.crt_sdays * 60 * 60 * 24 * 0.5 > expiry
-        cert_insec = os.path.join(args.E.mod, "res/insecure.pem")
+        if expired:
+            raise Exception("old server-cert has expired")
+
         for n in names:
             if n not in inf["sans"]:
                 raise Exception("does not have {}".format(n))
-        if expired:
-            raise Exception("old server-cert has expired")
-        if not filecmp.cmp(args.cert, cert_insec):
+
+        with load_resource(args.E, "res/insecure.pem") as f:
+            cert_insec = f.read()
+
+        with open(args.cert, "rb") as f:
+            active_cert = f.read()
+
+        if active_cert and active_cert != cert_insec:
             return
+
     except Exception as ex:
         log("cert", "will create new server-cert; {}".format(ex))
 
@@ -185,11 +211,11 @@ def _gen_srv(log: "RootLogger", args, netdevs: dict[str, Netdev]):
 
     bname = os.path.join(args.crt_dir, "srv")
     try:
-        os.unlink(bname + ".key")
+        wunlink(nlog, bname + ".key", VF)
     except:
         pass
-    os.rename(bname + "-key.pem", bname + ".key")
-    os.unlink(bname + ".csr")
+    atomic_move(nlog, bname + "-key.pem", bname + ".key", VF)
+    wunlink(nlog, bname + ".csr", VF)
 
     with open(os.path.join(args.crt_dir, "ca.pem"), "rb") as f:
         ca = f.read()

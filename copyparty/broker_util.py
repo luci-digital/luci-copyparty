@@ -2,7 +2,6 @@
 from __future__ import print_function, unicode_literals
 
 import argparse
-import traceback
 
 from queue import Queue
 
@@ -28,9 +27,21 @@ class ExceptionalQueue(Queue, object):
                 if rv[1] == "pebkac":
                     raise Pebkac(*rv[2:])
                 else:
-                    raise Exception(rv[2])
+                    raise rv[2]
 
         return rv
+
+
+class NotExQueue(object):
+    """
+    BrokerThr uses this instead of ExceptionalQueue; 7x faster
+    """
+
+    def __init__(self, rv: Any) -> None:
+        self.rv = rv
+
+    def get(self) -> Any:
+        return self.rv
 
 
 class BrokerCli(object):
@@ -48,7 +59,7 @@ class BrokerCli(object):
     def __init__(self) -> None:
         pass
 
-    def ask(self, dest: str, *args: Any) -> ExceptionalQueue:
+    def ask(self, dest: str, *args: Any) -> Union[ExceptionalQueue, NotExQueue]:
         return ExceptionalQueue(1)
 
     def say(self, dest: str, *args: Any) -> None:
@@ -65,8 +76,8 @@ def try_exec(want_retval: Union[bool, int], func: Any, *args: list[Any]) -> Any:
 
         return ["exception", "pebkac", ex.code, str(ex)]
 
-    except:
+    except Exception as ex:
         if not want_retval:
             raise
 
-        return ["exception", "stack", traceback.format_exc()]
+        return ["exception", "stack", ex]

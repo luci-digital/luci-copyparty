@@ -9,6 +9,9 @@ import threading  # typechk
 import time
 
 try:
+    if os.environ.get("PRTY_NO_TLS"):
+        raise Exception()
+
     HAVE_SSL = True
     import ssl
 except:
@@ -23,7 +26,7 @@ from .mtag import HAVE_FFMPEG
 from .th_cli import ThumbCli
 from .th_srv import HAVE_PIL, HAVE_VIPS
 from .u2idx import U2idx
-from .util import HMaccas, shut_socket
+from .util import HMaccas, NetMap, shut_socket
 
 if True:  # pylint: disable=using-constant-test
     from typing import Optional, Pattern, Union
@@ -50,11 +53,17 @@ class HttpConn(object):
         self.addr = addr
         self.hsrv = hsrv
 
-        self.mutex: threading.Lock = hsrv.mutex  # mypy404
+        self.u2mutex: threading.Lock = hsrv.u2mutex  # mypy404
         self.args: argparse.Namespace = hsrv.args  # mypy404
         self.E: EnvParams = self.args.E
         self.asrv: AuthSrv = hsrv.asrv  # mypy404
         self.u2fh: Util.FHC = hsrv.u2fh  # mypy404
+        self.pipes: Util.CachedDict = hsrv.pipes  # mypy404
+        self.ipu_iu: Optional[dict[str, str]] = hsrv.ipu_iu
+        self.ipu_nm: Optional[NetMap] = hsrv.ipu_nm
+        self.ipa_nm: Optional[NetMap] = hsrv.ipa_nm
+        self.xff_nm: Optional[NetMap] = hsrv.xff_nm
+        self.xff_lan: NetMap = hsrv.xff_lan  # type: ignore
         self.iphash: HMaccas = hsrv.broker.iphash
         self.bans: dict[str, int] = hsrv.bans
         self.aclose: dict[str, int] = hsrv.aclose
@@ -95,9 +104,6 @@ class HttpConn(object):
         self.ip = ip
         self.log_src = ("%s \033[%dm%d" % (ip, color, self.addr[1])).ljust(26)
         return self.log_src
-
-    def respath(self, res_name: str) -> str:
-        return os.path.join(self.E.mod, "web", res_name)
 
     def log(self, msg: str, c: Union[int, str] = 0) -> None:
         self.log_func(self.log_src, msg, c)
@@ -158,6 +164,7 @@ class HttpConn(object):
 
             self.log_src = self.log_src.replace("[36m", "[35m")
             try:
+                assert ssl  # type: ignore  # !rm
                 ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
                 ctx.load_cert_chain(self.args.cert)
                 if self.args.ssl_ver:
@@ -183,7 +190,7 @@ class HttpConn(object):
 
                 if self.args.ssl_dbg and hasattr(self.s, "shared_ciphers"):
                     ciphers = self.s.shared_ciphers()
-                    assert ciphers
+                    assert ciphers  # !rm
                     overlap = [str(y[::-1]) for y in ciphers]
                     self.log("TLS cipher overlap:" + "\n".join(overlap))
                     for k, v in [
@@ -217,3 +224,6 @@ class HttpConn(object):
             if self.u2idx:
                 self.hsrv.put_u2idx(str(self.addr), self.u2idx)
                 self.u2idx = None
+
+            if self.rproxy:
+                self.set_rproxy()

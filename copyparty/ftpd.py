@@ -19,7 +19,10 @@ from .__init__ import PY2, TYPE_CHECKING
 from .authsrv import VFS
 from .bos import bos
 from .util import (
+    FN_EMB,
+    VF_CAREFUL,
     Daemon,
+    ODict,
     Pebkac,
     exclude_dotfiles,
     fsenc,
@@ -28,7 +31,9 @@ from .util import (
     relchk,
     runhook,
     sanitize_fn,
+    set_fperms,
     vjoin,
+    wunlink,
 )
 
 if TYPE_CHECKING:
@@ -36,7 +41,10 @@ if TYPE_CHECKING:
 
 if True:  # pylint: disable=using-constant-test
     import typing
-    from typing import Any, Optional
+    from typing import Any, Optional, Union
+
+if PY2:
+    range = xrange  # type: ignore
 
 
 class FSE(FilesystemError):
@@ -60,25 +68,38 @@ class FtpAuth(DummyAuthorizer):
         if ip.startswith("::ffff:"):
             ip = ip[7:]
 
-        ip = ipnorm(ip)
+        ipn = ipnorm(ip)
         bans = self.hub.bans
-        if ip in bans:
-            rt = bans[ip] - time.time()
+        if ipn in bans:
+            rt = bans[ipn] - time.time()
             if rt < 0:
                 logging.info("client unbanned")
-                del bans[ip]
+                del bans[ipn]
             else:
                 raise AuthenticationFailed("banned")
 
+        args = self.hub.args
         asrv = self.hub.asrv
         uname = "*"
         if username != "anonymous":
             uname = ""
-            for zs in (password, username):
+            if args.usernames:
+                alts = ["%s:%s" % (username, password)]
+            else:
+                alts = password, username
+
+            for zs in alts:
                 zs = asrv.iacct.get(asrv.ah.hash(zs), "")
                 if zs:
                     uname = zs
                     break
+
+        if args.ipu and uname == "*":
+            uname = args.ipu_iu[args.ipu_nm.map(ip)]
+        if args.ipr and uname in args.ipr_u:
+            if not args.ipr_u[uname].map(ip):
+                logging.warning("username [%s] rejected by --ipr", uname)
+                uname = "*"
 
         if not uname or not (asrv.vfs.aread.get(uname) or asrv.vfs.awrite.get(uname)):
             g = self.hub.gpwd
@@ -131,12 +152,11 @@ class FtpFs(AbstractedFS):
         self.cwd = "/"  # pyftpdlib convention of leading slash
         self.root = "/var/lib/empty"
 
-        self.can_read = self.can_write = self.can_move = False
-        self.can_delete = self.can_get = self.can_upget = False
-        self.can_admin = self.can_dot = False
-
         self.listdirinfo = self.listdir
         self.chdir(".")
+
+    def log(self, msg: str, c: Union[int, str] = 0) -> None:
+        self.hub.log("ftpd", msg, c)
 
     def v2a(
         self,
@@ -154,9 +174,19 @@ class FtpFs(AbstractedFS):
                 t = "Unsupported characters in [{}]"
                 raise FSE(t.format(vpath), 1)
 
-            fn = sanitize_fn(fn or "", "", [".prologue.html", ".epilogue.html"])
+            fn = sanitize_fn(fn or "", "")
             vpath = vjoin(rd, fn)
             vfs, rem = self.hub.asrv.vfs.get(vpath, self.uname, r, w, m, d)
+            if (
+                w
+                and fn.lower() in FN_EMB
+                and self.h.uname not in vfs.axs.uread
+                and "wo_up_readme" not in vfs.flags
+            ):
+                fn = "_wo_" + fn
+                vpath = vjoin(rd, fn)
+                vfs, rem = self.hub.asrv.vfs.get(vpath, self.uname, r, w, m, d)
+
             if not vfs.realpath:
                 t = "No filesystem mounted at [{}]"
                 raise FSE(t.format(vpath))
@@ -168,9 +198,12 @@ class FtpFs(AbstractedFS):
                 if not avfs:
                     raise FSE(t.format(vpath), 1)
 
-                cr, cw, cm, cd, _, _, _, _ = avfs.can_access("", self.h.uname)
+                cr, cw, cm, cd, _, _, _, _, _ = avfs.uaxs[self.h.uname]
                 if r and not cr or w and not cw or m and not cm or d and not cd:
                     raise FSE(t.format(vpath), 1)
+
+            if "bcasechk" in vfs.flags and not vfs.casechk(rem, True):
+                raise FSE("No such file or directory", 1)
 
             return os.path.join(vfs.realpath, rem), vfs, rem
         except Pebkac as ex:
@@ -184,7 +217,7 @@ class FtpFs(AbstractedFS):
         m: bool = False,
         d: bool = False,
     ) -> tuple[str, VFS, str]:
-        return self.v2a(os.path.join(self.cwd, vpath), r, w, m, d)
+        return self.v2a(join(self.cwd, vpath), r, w, m, d)
 
     def ftp2fs(self, ftppath: str) -> str:
         # return self.v2a(ftppath)
@@ -205,23 +238,54 @@ class FtpFs(AbstractedFS):
         r = "r" in mode
         w = "w" in mode or "a" in mode or "+" in mode
 
-        ap = self.rv2a(filename, r, w)[0]
+        ap, vfs, _ = self.rv2a(filename, r, w)
+        self.validpath(ap)
         if w:
             try:
                 st = bos.stat(ap)
                 td = time.time() - st.st_mtime
+                need_unlink = True
             except:
+                need_unlink = False
                 td = 0
 
-            if td < -1 or td > self.args.ftp_wt:
-                raise FSE("Cannot open existing file for writing")
+        if w and need_unlink:
+            assert td  # type: ignore  # !rm
+            if td >= -1 and td <= self.args.ftp_wt:
+                # within permitted timeframe; allow overwrite or resume
+                do_it = True
+            elif self.args.no_del or self.args.ftp_no_ow:
+                # file too old, or overwrite not allowed; reject
+                do_it = False
+            else:
+                # allow overwrite if user has delete permission
+                # (avoids win2000 freaking out and deleting the server copy without uploading its own)
+                try:
+                    self.rv2a(filename, False, True, False, True)
+                    do_it = True
+                except:
+                    do_it = False
 
-        self.validpath(ap)
-        return open(fsenc(ap), mode)
+            if not do_it:
+                raise FSE("File already exists")
+
+            # Don't unlink file for append mode
+            elif "a" not in mode:
+                wunlink(self.log, ap, VF_CAREFUL)
+
+        ret = open(fsenc(ap), mode, self.args.iobuf)
+        if w and "fperms" in vfs.flags:
+            set_fperms(ret, vfs.flags)
+
+        return ret
 
     def chdir(self, path: str) -> None:
         nwd = join(self.cwd, path)
         vfs, rem = self.hub.asrv.vfs.get(nwd, self.uname, False, False)
+        if not vfs.realpath:
+            self.cwd = nwd
+            return
+
         ap = vfs.canonical(rem)
         try:
             st = bos.stat(ap)
@@ -236,20 +300,10 @@ class FtpFs(AbstractedFS):
             raise FSE("Permission denied", 1)
 
         self.cwd = nwd
-        (
-            self.can_read,
-            self.can_write,
-            self.can_move,
-            self.can_delete,
-            self.can_get,
-            self.can_upget,
-            self.can_admin,
-            self.can_dot,
-        ) = avfs.can_access("", self.h.uname)
 
     def mkdir(self, path: str) -> None:
-        ap = self.rv2a(path, w=True)[0]
-        bos.makedirs(ap)  # filezilla expects this
+        ap, vfs, _ = self.rv2a(path, w=True)
+        bos.makedirs(ap, vf=vfs.flags)  # filezilla expects this
 
     def listdir(self, path: str) -> list[str]:
         vpath = join(self.cwd, path)
@@ -263,11 +317,12 @@ class FtpFs(AbstractedFS):
                 self.uname,
                 not self.args.no_scandir,
                 [[True, False], [False, True]],
+                throw=True,
             )
             vfs_ls = [x[0] for x in vfs_ls1]
             vfs_ls.extend(vfs_virt.keys())
 
-            if not self.can_dot:
+            if self.uname not in vfs.axs.udot:
                 vfs_ls = exclude_dotfiles(vfs_ls)
 
             vfs_ls.sort()
@@ -281,9 +336,20 @@ class FtpFs(AbstractedFS):
                 # display write-only folders as empty
                 return []
 
-            # return list of volumes
-            r = {x.split("/")[0]: 1 for x in self.hub.asrv.vfs.all_vols.keys()}
-            return list(sorted(list(r.keys())))
+            # return list of accessible volumes
+            ret = []
+            for vn in self.hub.asrv.vfs.all_vols.values():
+                if "/" in vn.vpath or not vn.vpath:
+                    continue  # only include toplevel-mounted vols
+
+                try:
+                    self.hub.asrv.vfs.get(vn.vpath, self.uname, True, False)
+                    ret.append(vn.vpath)
+                except:
+                    pass
+
+            ret.sort()
+            return ret
 
     def rmdir(self, path: str) -> None:
         ap = self.rv2a(path, d=True)[0]
@@ -299,21 +365,18 @@ class FtpFs(AbstractedFS):
 
         vp = join(self.cwd, path).lstrip("/")
         try:
-            self.hub.up2k.handle_rm(self.uname, self.h.cli_ip, [vp], [], False)
+            self.hub.up2k.handle_rm(self.uname, self.h.cli_ip, [vp], [], False, False)
         except Exception as ex:
             raise FSE(str(ex))
 
     def rename(self, src: str, dst: str) -> None:
-        if not self.can_move:
-            raise FSE("Not allowed for user " + self.h.uname)
-
         if self.args.no_mv:
             raise FSE("The rename/move feature is disabled in server config")
 
         svp = join(self.cwd, src).lstrip("/")
         dvp = join(self.cwd, dst).lstrip("/")
         try:
-            self.hub.up2k.handle_mv(self.uname, svp, dvp)
+            self.hub.up2k.handle_mv("", self.uname, self.h.cli_ip, svp, dvp)
         except Exception as ex:
             raise FSE(str(ex))
 
@@ -337,7 +400,7 @@ class FtpFs(AbstractedFS):
 
     def utime(self, path: str, timeval: float) -> None:
         ap = self.rv2a(path, w=True)[0]
-        return bos.utime(ap, (timeval, timeval))
+        bos.utime_c(logging.warning, ap, int(timeval), False)
 
     def lstat(self, path: str) -> os.stat_result:
         ap = self.rv2a(path)[0]
@@ -409,7 +472,7 @@ class FtpHandler(FTPHandler):
         if cip.startswith("::ffff:"):
             cip = cip[7:]
 
-        if self.args.ftp_ipa_re and not self.args.ftp_ipa_re.match(cip):
+        if self.args.ftp_ipa_nm and not self.args.ftp_ipa_nm.map(cip):
             logging.warning("client rejected (--ftp-ipa): %s", cip)
             self.connected = False
             conn.close()
@@ -426,23 +489,37 @@ class FtpHandler(FTPHandler):
     def ftp_STOR(self, file: str, mode: str = "w") -> Any:
         # Optional[str]
         vp = join(self.fs.cwd, file).lstrip("/")
-        ap, vfs, rem = self.fs.v2a(vp, w=True)
+        try:
+            ap, vfs, rem = self.fs.v2a(vp, w=True)
+        except Exception as ex:
+            self.respond("550 %s" % (ex,), logging.info)
+            return
         self.vfs_map[ap] = vp
         xbu = vfs.flags.get("xbu")
-        if xbu and not runhook(
-            None,
-            xbu,
-            ap,
-            vfs.canonical(rem),
-            "",
-            self.uname,
-            0,
-            0,
-            self.cli_ip,
-            0,
-            "",
-        ):
-            raise FSE("Upload blocked by xbu server config")
+        if xbu:
+            hr = runhook(
+                None,
+                None,
+                self.hub.up2k,
+                "xbu.ftpd",
+                xbu,
+                ap,
+                vp,
+                "",
+                self.uname,
+                self.hub.asrv.vfs.get_perms(vp, self.uname),
+                0,
+                0,
+                self.cli_ip,
+                time.time(),
+                None,
+            )
+            t = hr.get("rejectmsg") or ""
+            if t or not hr:
+                if not t:
+                    t = "Upload blocked by xbu server config: %r" % (vp,)
+                self.respond("550 %s" % (t,), logging.info)
+                return
 
         # print("ftp_STOR: {} {} => {}".format(vp, mode, ap))
         ret = FTPHandler.ftp_STOR(self, file, mode)
@@ -542,8 +619,16 @@ class Ftpd(object):
         if "::" in ips:
             ips.append("0.0.0.0")
 
+        ips = [x for x in ips if not x.startswith(("unix:", "fd:"))]
+
         if self.args.ftp4:
             ips = [x for x in ips if ":" not in x]
+
+        if not ips:
+            lgr.fatal("cannot start ftp-server; no compatible IPs in -i")
+            return
+
+        ips = list(ODict.fromkeys(ips))  # dedup
 
         ioloop = IOLoop()
         for ip in ips:

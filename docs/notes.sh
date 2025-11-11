@@ -25,6 +25,27 @@ echo; find -type f | while IFS= read -r x; do printf '\033[A\033[36m%s\033[K\033
 
 
 ##
+## sync pics/vids from phone
+##  (takes all files named (IMG|PXL|PANORAMA|Screenshot)_20231224_*)
+
+cd /storage/emulated/0/DCIM/Camera
+find -mindepth 1 -maxdepth 1 | sort | cut -c3- > ls
+url=https://192.168.1.3:3923/rw/pics/Camera/$d/; awk -F_ '!/^[A-Z][A-Za-z]{1,16}_[0-9]{8}[_-]/{next} {d=substr($2,1,6)} !t[d]++{print d}' ls | while read d; do grep -E "^[A-Z][A-Za-z]{1,16}_$d" ls | tr '\n' '\0' | xargs -0 python3 ~/dev/copyparty/bin/u2c.py -td $url --; done
+
+
+##
+## convert symlinks to hardlinks (probably safe, no guarantees)
+
+find -type l | while IFS= read -r lnk; do [ -h "$lnk" ] || { printf 'nonlink: %s\n' "$lnk"; continue; }; dst="$(readlink -f -- "$lnk")"; [ -e "$dst" ] || { printf '???\n%s\n%s\n' "$lnk" "$dst"; continue; }; printf 'relinking:\n  %s\n  %s\n' "$lnk" "$dst"; rm -- "$lnk"; ln -- "$dst" "$lnk"; done 
+
+
+##
+## convert hardlinks to symlinks (maybe not as safe? use with caution)
+
+e=; p=; find -printf '%i %p\n' | awk '{i=$1;sub(/[^ ]+ /,"")} !n[i]++{p[i]=$0;next} {printf "real %s\nlink %s\n",p[i],$0}' | while read cls p; do [ -e "$p" ] || e=1; p="$(realpath -- "$p")" || e=1; [ -e "$p" ] || e=1; [ $cls = real ] && { real="$p"; continue; }; [ $cls = link ] || e=1; [ "$p" ] || e=1; [ $e ] && { echo "ERROR $p"; break; }; printf '\033[36m%s \033[0m -> \033[35m%s\033[0m\n' "$p" "$real"; rm "$p"; ln -s "$real" "$p" || { echo LINK FAILED; break; }; done
+
+
+##
 ## create a test payload
 
 head -c $((2*1024*1024*1024)) /dev/zero | openssl enc -aes-256-ctr -pass pass:hunter2 -nosalt > garbage.file
@@ -50,7 +71,7 @@ avg() { awk 'function pr(ncsz) {if (nsmp>0) {printf "%3s %s\n", csz, sum/nsmp} c
 python3 -um copyparty -nw -v srv::rw -i 127.0.0.1 2>&1 | tee log 
 cat log | awk '!/"purl"/{next} {s=$1;sub(/[^m]+m/,"");gsub(/:/," ");t=60*(60*$1+$2)+$3} t<p{t+=86400} !a{a=t;sa=s} {b=t;sb=s} END {print b-a,sa,sb}'
 
-# or if the client youre measuring dies for ~15sec every once ina while and you wanna filter those out,
+# or if the client you're measuring dies for ~15sec every once ina while and you wanna filter those out,
 cat log | awk '!/"purl"/{next} {s=$1;sub(/[^m]+m/,"");gsub(/:/," ");t=60*(60*$1+$2)+$3} t<p{t+=86400} !p{a=t;p=t;r=0;next} t-p>1{printf "%.3f += %.3f - %.3f  (%.3f)  # %.3f -> %.3f\n",r,p,a,p-a,p,t;r+=p-a;a=t} {p=t} END {print r+p-a}'
 
 
@@ -119,6 +140,9 @@ find -maxdepth 1 -printf '%s %p\n' | sort -n | awk '!/-([0-9a-zA-Z_-]{11})\.(mkv
 
 # unique stacks in a stackdump
 f=a; rm -rf stacks; mkdir stacks; grep -E '^#' $f | while IFS= read -r n; do awk -v n="$n" '!$0{o=0} o; $0==n{o=1}' <$f >stacks/f; h=$(sha1sum <stacks/f | cut -c-16); mv stacks/f stacks/$h-"$n"; done ; find stacks/ | sort | uniq -cw24
+
+# find unused css variables
+cat browser.css | sed -r 's/(var\()/\n\1/g' | awk '{sub(/:/," ")} $1~/^--/{d[$1]=1} /var\(/{sub(/.*var\(/,"");sub(/\).*/,"");u[$1]=1} END{for (x in u) delete d[x]; for (x in d) print x}' | tr '\n' '|'
 
 
 ##
@@ -200,6 +224,11 @@ sox -DnV -r8000 -b8 -c1 /dev/shm/a.wav synth 1.1 sin 400 vol 0.02
 # play icon calibration pics
 for w in 150 170 190 210 230 250; do for h in 130 150 170 190 210; do /c/Program\ Files/ImageMagick-7.0.11-Q16-HDRI/magick.exe convert -size ${w}x${h} xc:brown -fill orange -draw "circle $((w/2)),$((h/2)) $((w/2)),$((h/3))" $w-$h.png; done; done
 
+# compress chiptune modules
+mkdir gz; for f in *.*; do pigz -c11 -I100 <"$f" >gz/"$f"gz; touch -r "$f" gz/"$f"gz; done
+mkdir xz; for f in *.*; do xz -cz9 <"$f" >xz/"$f"xz; touch -r "$f" xz/"$f"xz; done
+mkdir z; for f in *.*; do 7z a -tzip -mx=9 -mm=lzma "z/${f}z" "$f" && touch -r "$f" z/"$f"z; done 
+
 
 ##
 ## vscode
@@ -225,6 +254,17 @@ cat copyparty/httpcli.py | awk '/^[^a-zA-Z0-9]+def / {printf "%s\n%s\n\n", f, pl
 
 # create a folder with symlinks to big files
 for d in /usr /var; do find $d -type f -size +30M 2>/dev/null; done | while IFS= read -r x; do ln -s "$x" big/; done
+
+# up2k worst-case testfiles: create 64 GiB (256 x 256 MiB) of sparse files; each file takes 1 MiB disk space; each 1 MiB chunk is globally unique
+for f in {0..255}; do echo $f; truncate -s 256M $f; b1=$(printf '%02x' $f); for o in {0..255}; do b2=$(printf '%02x' $o); printf "\x$b1\x$b2" | dd of=$f bs=2 seek=$((o*1024*1024)) conv=notrunc 2>/dev/null; done; done
+# create 6.06G file with 16 bytes of unique data at start+end of each 32M chunk
+sz=6509559808; truncate -s $sz f; csz=33554432; sz=$((sz/16)); step=$((csz/16)); ofs=0; while [ $ofs -lt $sz ]; do dd if=/dev/urandom of=f bs=16 count=2 seek=$ofs conv=notrunc iflag=fullblock; [ $ofs = 0 ] && ofs=$((ofs+step-1)) || ofs=$((ofs+step)); done
+# same but for chunksizes 16M (3.1G), 24M (4.1G), 48M (128.1G)
+sz=3321225472;   csz=16777216;
+sz=4394967296;   csz=25165824;
+sz=6509559808;   csz=33554432;
+sz=138438953472; csz=50331648;
+f=csz-$csz; truncate -s $sz $f; sz=$((sz/16)); step=$((csz/16)); ofs=0; while [ $ofs -lt $sz ]; do dd if=/dev/urandom of=$f bs=16 count=2 seek=$ofs conv=notrunc iflag=fullblock; [ $ofs = 0 ] && ofs=$((ofs+step-1)) || ofs=$((ofs+step)); done
 
 # py2 on osx
 brew install python@2
@@ -297,3 +337,5 @@ mk && t0="$(date)" && while true; do date -s "$(date '+ 1 hour')"; systemd-tmpfi
 mk && sudo -u ed flock /tmp/foo sleep 40 & sleep 1; ps aux | grep -E 'sleep 40$' && t0="$(date)" && for n in {1..40}; do date -s "$(date '+ 1 day')"; systemd-tmpfiles --clean; ls -1 /tmp | grep foo || break; done; echo "$t0"
 mk && t0="$(date)" && for n in {1..40}; do date -s "$(date '+ 1 day')"; systemd-tmpfiles --clean; ls -1 /tmp | grep foo || break; tar -cf/dev/null /tmp/foo; done; echo "$t0"
 
+# number of megabytes downloaded since some date
+awk </var/log/wjaycore.out '/^..36m2025-05-20/{o=1} !o{next} !/ plain 20[06](,| \[[^,]+\],) +[0-9.]+.\[33m[KM] .* n[0-9]+$/{next} {v=$0;sub(/.* plain 20[06](,| \[[^,]+\],) +/,"",v);sub(/ .*/,"",v);u=v;sub(/.\[.*/,"",v);sub(/.*m/,"",u);$0=u} /[KMG]/{v*=1024} /[MG]/{v*=1024} /G/{v*=1024} {t+=v} END{printf "%d\n",t/(1024*1024)}'

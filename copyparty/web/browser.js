@@ -1,8 +1,10 @@
 "use strict";
 
-var XHR = XMLHttpRequest;
-var Ls = {
-	"eng": {
+var XHR = XMLHttpRequest,
+	img_re = /\.(a?png|avif|bmp|gif|heif|jpe?g|jfif|svg|webp|webm|mkv|mp4|m4v|mov)(\?|$)/i;
+
+if (1)
+	Ls.eng = {
 		"tt": "English",
 
 		"cols": {
@@ -20,9 +22,9 @@ var Ls = {
 			"vq": "video quality / bitrate",
 			"pixfmt": "subsampling / pixel structure",
 			"resw": "horizontal resolution",
-			"resh": "veritcal resolution",
+			"resh": "vertical resolution",
 			"chs": "audio channels",
-			"hz": "sample rate"
+			"hz": "sample rate",
 		},
 
 		"hks": [
@@ -33,18 +35,19 @@ var Ls = {
 				"file-manager",
 				["G", "toggle list / grid view"],
 				["T", "toggle thumbnails / icons"],
-				["🡅 A/D", "thumbnail size"],
+				["⇧ A/D", "thumbnail size"],
 				["ctrl-K", "delete selected"],
-				["ctrl-X", "cut selected"],
-				["ctrl-V", "paste into folder"],
+				["ctrl-X", "cut selection to clipboard"],
+				["ctrl-C", "copy selection to clipboard"],
+				["ctrl-V", "paste (move/copy) here"],
 				["Y", "download selected"],
 				["F2", "rename selected"],
 
 				"file-list-sel",
 				["space", "toggle file selection"],
-				["🡑/🡓", "move selection cursor"],
-				["ctrl 🡑/🡓", "move cursor and viewport"],
-				["🡅 🡑/🡓", "select prev/next file"],
+				["↑/↓", "move selection cursor"],
+				["ctrl ↑/↓", "move cursor and viewport"],
+				["⇧ ↑/↓", "select prev/next file"],
 				["ctrl-A", "select all files / folders"],
 			], [
 				"navigation",
@@ -59,6 +62,7 @@ var Ls = {
 				["U/O", "skip 10sec back/fwd"],
 				["0..9", "jump to 0%..90%"],
 				["P", "play/pause (also initiates)"],
+				["S", "select playing song"],
 				["Y", "download song"],
 			], [
 				"image-viewer",
@@ -66,7 +70,8 @@ var Ls = {
 				["Home/End", "first/last pic"],
 				["F", "fullscreen"],
 				["R", "rotate clockwise"],
-				["🡅 R", "rotate ccw"],
+				["⇧ R", "rotate ccw"],
+				["S", "select pic"],
 				["Y", "download pic"],
 			], [
 				"video-player",
@@ -81,17 +86,25 @@ var Ls = {
 				["I/K", "prev/next file"],
 				["M", "close textfile"],
 				["E", "edit textfile"],
-				["S", "select file (for cut/rename)"],
+				["S", "select file (for cut/copy/rename)"],
 			]
 		],
 
 		"m_ok": "OK",
 		"m_ng": "Cancel",
 
-		"ht_s": "second!s",
-		"ht_m": "minute!s",
-		"ht_h": "hour!s",
-		"ht_d": "day!s",
+		"enable": "Enable",
+		"danger": "DANGER",
+		"clipped": "copied to clipboard",
+
+		"ht_s1": "second",
+		"ht_s2": "seconds",
+		"ht_m1": "minute",
+		"ht_m2": "minutes",
+		"ht_h1": "hour",
+		"ht_h2": "hours",
+		"ht_d1": "day",
+		"ht_d2": "days",
 		"ht_and": " and ",
 
 		"goh": "control-panel",
@@ -99,10 +112,11 @@ var Ls = {
 		"gou": 'parent folder">up',
 		"gon": 'next folder">next',
 		"logout": "Logout ",
+		"login": "Login",
 		"access": " access",
 		"ot_close": "close submenu",
 		"ot_search": "search for files by attributes, path / name, music tags, or any combination of those$N$N&lt;code&gt;foo bar&lt;/code&gt; = must contain both «foo» and «bar»,$N&lt;code&gt;foo -bar&lt;/code&gt; = must contain «foo» but not «bar»,$N&lt;code&gt;^yana .opus$&lt;/code&gt; = start with «yana» and be an «opus» file$N&lt;code&gt;&quot;try unite&quot;&lt;/code&gt; = contain exactly «try unite»$N$Nthe date format is iso-8601, like$N&lt;code&gt;2009-12-31&lt;/code&gt; or &lt;code&gt;2020-09-12 23:30:00&lt;/code&gt;",
-		"ot_unpost": "unpost: delete your recent uploads",
+		"ot_unpost": "unpost: delete your recent uploads, or abort unfinished ones",
 		"ot_bup": "bup: basic uploader, even supports netscape 4.0",
 		"ot_mkdir": "mkdir: create a new directory",
 		"ot_md": "new-md: create a new markdown document",
@@ -123,13 +137,17 @@ var Ls = {
 		"wt_ren": "rename selected items$NHotkey: F2",
 		"wt_del": "delete selected items$NHotkey: ctrl-K",
 		"wt_cut": "cut selected items &lt;small&gt;(then paste somewhere else)&lt;/small&gt;$NHotkey: ctrl-X",
+		"wt_cpy": "copy selected items to clipboard$N(to paste them somewhere else)$NHotkey: ctrl-C",
 		"wt_pst": "paste a previously cut / copied selection$NHotkey: ctrl-V",
 		"wt_selall": "select all files$NHotkey: ctrl-A (when file focused)",
 		"wt_selinv": "invert selection",
+		"wt_zip1": "download this folder as archive",
 		"wt_selzip": "download selection as archive",
 		"wt_seldl": "download selection as separate files$NHotkey: Y",
 		"wt_npirc": "copy irc-formatted track info",
 		"wt_nptxt": "copy plaintext track info",
+		"wt_m3ua": "add to m3u playlist (click <code>📻copy</code> later)",
+		"wt_m3uc": "copy m3u playlist to clipboard",
 		"wt_grid": "toggle grid / list view$NHotkey: G",
 		"wt_prev": "previous track$NHotkey: J",
 		"wt_play": "play / pause$NHotkey: P",
@@ -137,9 +155,10 @@ var Ls = {
 
 		"ul_par": "parallel uploads:",
 		"ut_rand": "randomize filenames",
-		"ut_u2ts": "copy the last-modified timestamp$Nfrom your filesystem to the server",
+		"ut_u2ts": "copy the last-modified timestamp$Nfrom your filesystem to the server\">📅",
+		"ut_ow": "overwrite existing files on the server?$N🛡️: never (will generate a new filename instead)$N🕒: overwrite if server-file is older than yours$N♻️: always overwrite if the files are different",
 		"ut_mt": "continue hashing other files while uploading$N$Nmaybe disable if your CPU or HDD is a bottleneck",
-		"ut_ask": "ask for confirmation before upload starts",
+		"ut_ask": 'ask for confirmation before upload starts">💭',
 		"ut_pot": "improve upload speed on slow devices$Nby making the UI less complex",
 		"ut_srch": "don't actually upload, instead check if the files already $N exist on the server (will scan all folders you can read)",
 		"ut_par": "pause uploads by setting it to 0$N$Nincrease if your connection is slow / high latency$N$Nkeep it 1 on LAN or if the server HDD is a bottleneck",
@@ -168,6 +187,15 @@ var Ls = {
 		"utl_stat": "status",
 		"utl_prog": "progress",
 
+		// keep short:
+		"utl_404": "404",
+		"utl_err": "ERROR",
+		"utl_oserr": "OS-error",
+		"utl_found": "found",
+		"utl_defer": "defer",
+		"utl_yolo": "YOLO",
+		"utl_done": "done",
+
 		"ul_flagblk": "the files were added to the queue</b><br>however there is a busy up2k in another browser tab,<br>so waiting for that to finish first",
 		"ul_btnlk": "the server configuration has locked this switch into this state",
 
@@ -179,12 +207,14 @@ var Ls = {
 		"u_nav_b": '<a href="#" id="modal-ok">Files</a><a href="#" id="modal-ng">One folder</a>',
 
 		"cl_opts": "switches",
+		"cl_hfsz": "filesize",
 		"cl_themes": "theme",
 		"cl_langs": "language",
 		"cl_ziptype": "folder download",
 		"cl_uopts": "up2k switches",
 		"cl_favico": "favicon",
 		"cl_bigdir": "big dirs",
+		"cl_hsort": "#sort",
 		"cl_keytype": "key notation",
 		"cl_hiddenc": "hidden columns",
 		"cl_hidec": "hide",
@@ -192,17 +222,27 @@ var Ls = {
 		"cl_hpick": "tap on column headers to hide in the table below",
 		"cl_hcancel": "column hiding aborted",
 
-		"ct_thumb": "in grid-view, toggle icons or thumbnails$NHotkey: T",
-		"ct_csel": "use CTRL and SHIFT for file selection in grid-view",
-		"ct_dots": "show hidden files (if server permits)",
-		"ct_dir1st": "sort folders before files",
-		"ct_readme": "show README.md in folder listings",
-		"ct_idxh": "show index.html instead of folder listing",
-		"ct_sbars": "show scrollbars",
+		"ct_grid": '田 the grid',
+		"ct_ttips": '◔ ◡ ◔">ℹ️ tooltips',
+		"ct_thumb": 'in grid-view, toggle icons or thumbnails$NHotkey: T">🖼️ thumbs',
+		"ct_csel": 'use CTRL and SHIFT for file selection in grid-view">sel',
+		"ct_ihop": 'when the image viewer is closed, scroll down to the last viewed file">g⮯',
+		"ct_dots": 'show hidden files (if server permits)">dotfiles',
+		"ct_qdel": 'when deleting files, only ask for confirmation once">qdel',
+		"ct_dir1st": 'sort folders before files">📁 first',
+		"ct_nsort": 'natural sort (for filenames with leading digits)">nsort',
+		"ct_utc": 'show all datetimes in UTC">UTC',
+		"ct_readme": 'show README.md in folder listings">📜 readme',
+		"ct_idxh": 'show index.html instead of folder listing">htm',
+		"ct_sbars": 'show scrollbars">⟊',
 
-		"cut_turbo": "the yolo button, you probably DO NOT want to enable this:$N$Nuse this if you were uploading a huge amount of files and had to restart for some reason, and want to continue the upload ASAP$N$Nthis replaces the hash-check with a simple <em>&quot;does this have the same filesize on the server?&quot;</em> so if the file contents are different it will NOT be uploaded$N$Nyou should turn this off when the upload is done, and then &quot;upload&quot; the same files again to let the client verify them",
+		"cut_umod": "if a file already exists on the server, update the server's last-modified timestamp to match your local file (requires write+delete permissions)\">re📅",
 
-		"cut_datechk": "has no effect unless the turbo button is enabled$N$Nreduces the yolo factor by a tiny amount; checks whether the file timestamps on the server matches yours$N$Nshould <em>theoretically</em> catch most unfinished / corrupted uploads, but is not a substitute for doing a verification pass with turbo disabled afterwards",
+		"cut_turbo": "the yolo button, you probably DO NOT want to enable this:$N$Nuse this if you were uploading a huge amount of files and had to restart for some reason, and want to continue the upload ASAP$N$Nthis replaces the hash-check with a simple <em>&quot;does this have the same filesize on the server?&quot;</em> so if the file contents are different it will NOT be uploaded$N$Nyou should turn this off when the upload is done, and then &quot;upload&quot; the same files again to let the client verify them\">turbo",
+
+		"cut_datechk": "has no effect unless the turbo button is enabled$N$Nreduces the yolo factor by a tiny amount; checks whether the file timestamps on the server matches yours$N$Nshould <em>theoretically</em> catch most unfinished / corrupted uploads, but is not a substitute for doing a verification pass with turbo disabled afterwards\">date-chk",
+
+		"cut_u2sz": "size (in MiB) of each upload chunk; big values fly better across the atlantic. Try low values on very unreliable connections",
 
 		"cut_appl": "skip uploading apple/macos metadata files$Nsuch as __MACOSX, .DS_Store, .fseventsd",
 
@@ -213,7 +253,9 @@ var Ls = {
 		"cut_nag": "OS notification when upload completes$N(only if the browser or tab is not active)",
 		"cut_sfx": "audible alert when upload completes$N(only if the browser or tab is not active)",
 
-		"cut_mt": "use multithreading to accelerate file hashing$N$Nthis uses web-workers and requires$Nmore RAM (up to 512 MiB extra)$N$N30% faster https, 4.5x faster http,$Nand 5.3x faster on android phones",
+		"cut_mt": "use multithreading to accelerate file hashing$N$Nthis uses web-workers and requires$Nmore RAM (up to 512 MiB extra)$N$Nmakes https 30% faster, http 4.5x faster\">mt",
+
+		"cut_wasm": "use wasm instead of the browser's built-in hasher; improves speed on chrome-based browsers but increases CPU load, and many older versions of chrome have bugs which makes the browser consume all RAM and crash if this is enabled\">wasm",
 
 		"cft_text": "favicon text (blank and refresh to disable)",
 		"cft_fg": "foreground color",
@@ -221,6 +263,7 @@ var Ls = {
 
 		"cdt_lim": "max number of files to show in a folder",
 		"cdt_ask": "when scrolling to the bottom,$Ninstead of loading more files,$Nask what to do",
+		"cdt_hsort": "how many sorting rules (&lt;code&gt;,sorthref&lt;/code&gt;) to include in media-URLs. Setting this to 0 will also ignore sorting-rules included in media links when clicking them",
 
 		"tt_entree": "show navpane (directory tree sidebar)$NHotkey: B",
 		"tt_detree": "show breadcrumbs$NHotkey: B",
@@ -231,33 +274,57 @@ var Ls = {
 		"tt_wrap": "word wrap",
 		"tt_hover": "reveal overflowing lines on hover$N( breaks scrolling unless mouse $N&nbsp; cursor is in the left gutter )",
 
-		"ml_pmode": "playback mode",
+		"ml_pmode": "at end of folder...",
+		"ml_btns": "cmds",
 		"ml_tcode": "transcode",
+		"ml_tcode2": "transcode to",
 		"ml_tint": "tint",
 		"ml_eq": "audio equalizer",
 		"ml_drc": "dynamic range compressor",
 
+		"mt_loop": "loop/repeat one song\">🔁",
+		"mt_one": "stop after one song\">1️⃣",
+		"mt_shuf": "shuffle the songs in each folder\">🔀",
+		"mt_aplay": "autoplay if there is a song-ID in the link you clicked to access the server$N$Ndisabling this will also stop the page URL from being updated with song-IDs when playing music, to prevent autoplay if these settings are lost but the URL remains\">a▶",
 		"mt_preload": "start loading the next song near the end for gapless playback\">preload",
+		"mt_prescan": "go to the next folder before the last song$Nends, keeping the webbrowser happy$Nso it doesn't stop the playback\">nav",
 		"mt_fullpre": "try to preload the entire song;$N✅ enable on <b>unreliable</b> connections,$N❌ <b>disable</b> on slow connections probably\">full",
+		"mt_fau": "on phones, prevent music from stopping if the next song doesn't preload fast enough (can make tags display glitchy)\">☕️",
 		"mt_waves": "waveform seekbar:$Nshow audio amplitude in the scrubber\">~s",
 		"mt_npclip": "show buttons for clipboarding the currently playing song\">/np",
+		"mt_m3u_c": "show buttons for clipboarding the$Nselected songs as m3u8 playlist entries\">📻",
 		"mt_octl": "os integration (media hotkeys / osd)\">os-ctl",
-		"mt_oseek": "allow seeking through os integration\">seek",
+		"mt_oseek": "allow seeking through os integration$N$Nnote: on some devices (iPhones),$Nthis replaces the next-song button\">seek",
 		"mt_oscv": "show album cover in osd\">art",
 		"mt_follow": "keep the playing track scrolled into view\">🎯",
 		"mt_compact": "compact controls\">⟎",
+		"mt_uncache": "clear cache &nbsp;(try this if your browser cached$Na broken copy of a song so it refuses to play)\">uncache",
 		"mt_mloop": "loop the open folder\">🔁 loop",
 		"mt_mnext": "load the next folder and continue\">📂 next",
-		"mt_cflac": "convert flac / wav to opus\">flac",
-		"mt_caac": "convert aac / m4a to opus\">aac",
-		"mt_coth": "convert all others (not mp3) to opus\">oth",
+		"mt_mstop": "stop playback\">⏸ stop",
+		"mt_cflac": "convert flac / wav to {0}\">flac",
+		"mt_caac": "convert aac / m4a to {0}\">aac",
+		"mt_coth": "convert all others (not mp3) to {0}\">oth",
+		"mt_c2opus": "best choice for desktops, laptops, android\">opus",
+		"mt_c2owa": "opus-weba, for iOS 17.5 and newer\">owa",
+		"mt_c2caf": "opus-caf, for iOS 11 through 17\">caf",
+		"mt_c2mp3": "use this on very old devices\">mp3",
+		"mt_c2flac": "best sound quality, but huge downloads\">flac",
+		"mt_c2wav": "uncompressed playback (even bigger)\">wav",
+		"mt_c2ok": "nice, good choice",
+		"mt_c2nd": "that's not the recommended output format for your device, but that's fine",
+		"mt_c2ng": "your device does not seem to support this output format, but let's try anyways",
+		"mt_xowa": "there are bugs in iOS preventing background playback using this format; please use caf or mp3 instead",
 		"mt_tint": "background level (0-100) on the seekbar$Nto make buffering less distracting",
 		"mt_eq": "enables the equalizer and gain control;$N$Nboost &lt;code&gt;0&lt;/code&gt; = standard 100% volume (unmodified)$N$Nwidth &lt;code&gt;1 &nbsp;&lt;/code&gt; = standard stereo (unmodified)$Nwidth &lt;code&gt;0.5&lt;/code&gt; = 50% left-right crossfeed$Nwidth &lt;code&gt;0 &nbsp;&lt;/code&gt; = mono$N$Nboost &lt;code&gt;-0.8&lt;/code&gt; &amp; width &lt;code&gt;10&lt;/code&gt; = vocal removal :^)$N$Nenabling the equalizer makes gapless albums fully gapless, so leave it on with all the values at zero (except width = 1) if you care about that",
 		"mt_drc": "enables the dynamic range compressor (volume flattener / brickwaller); will also enable EQ to balance the spaghetti, so set all EQ fields except for 'width' to 0 if you don't want it$N$Nlowers the volume of audio above THRESHOLD dB; for every RATIO dB past THRESHOLD there is 1 dB of output, so default values of tresh -24 and ratio 12 means it should never get louder than -22 dB and it is safe to increase the equalizer boost to 0.8, or even 1.8 with ATK 0 and a huge RLS like 90 (only works in firefox; RLS is max 1 in other browsers)$N$N(see wikipedia, they explain it much better)",
 
 		"mb_play": "play",
 		"mm_hashplay": "play this audio file?",
+		"mm_m3u": "press <code>Enter/OK</code> to Play\npress <code>ESC/Cancel</code> to Edit",
 		"mp_breq": "need firefox 82+ or chrome 73+ or iOS 15+",
+		"mm_bload": "now loading...",
+		"mm_bconv": "converting to {0}, please wait...",
 		"mm_opusen": "your browser cannot play aac / m4a files;\ntranscoding to opus is now enabled",
 		"mm_playerr": "playback failed: ",
 		"mm_eabrt": "The playback attempt was cancelled",
@@ -267,20 +334,27 @@ var Ls = {
 		"mm_eunk": "Unknown Errol",
 		"mm_e404": "Could not play audio; error 404: File not found.",
 		"mm_e403": "Could not play audio; error 403: Access denied.\n\nTry pressing F5 to reload, maybe you got logged out",
+		"mm_e500": "Could not play audio; error 500: Check server logs.",
 		"mm_e5xx": "Could not play audio; server error ",
 		"mm_nof": "not finding any more audio files nearby",
-		"mm_pwrsv": "<p>it looks like playback is being interrupted by your phone's power-saving settings!</p>" + '<p>please go to <a target="_blank" href="https://user-images.githubusercontent.com/241032/235262121-2ffc51ae-7821-4310-a322-c3b7a507890c.png">the app settings of your browser</a> and then <a target="_blank" href="https://user-images.githubusercontent.com/241032/235262123-c328cca9-3930-4948-bd18-3949b9fd3fcf.png">allow unrestricted battery usage</a> to fix it.</p><p><em>however,</em> it could also be due to the browser\'s autoplay settings;</p><p>Firefox: tap the icon on the left side of the address bar, then select "autoplay" and "allow audio"</p><p>Chrome: the problem will gradually dissipate as you play more music on this site</p>',
-		"mm_iosblk": "<p>your web browser thinks the audio playback is unwanted, and it decided to block playback until you start another track manually... unfortunately we are both powerless in telling it otherwise</p><p>supposedly this will get better as you continue playing music on this site, but I'm unfamiliar with apple devices so idk if that's true</p><p>you could try another browser, maybe firefox or chrome?</p>",
+		"mm_prescan": "Looking for music to play next...",
+		"mm_scank": "Found the next song:",
+		"mm_uncache": "cache cleared; all songs will redownload on next playback",
 		"mm_hnf": "that song no longer exists",
 
 		"im_hnf": "that image no longer exists",
 
+		"f_empty": 'this folder is empty',
 		"f_chide": 'this will hide the column «{0}»\n\nyou can unhide columns in the settings tab',
 		"f_bigtxt": "this file is {0} MiB large -- really view as text?",
+		"f_bigtxt2": "view just the end of the file instead? this will also enable following/tailing, showing newly added lines of text in real time",
 		"fbd_more": '<div id="blazy">showing <code>{0}</code> of <code>{1}</code> files; <a href="#" id="bd_more">show {2}</a> or <a href="#" id="bd_all">show all</a></div>',
 		"fbd_all": '<div id="blazy">showing <code>{0}</code> of <code>{1}</code> files; <a href="#" id="bd_all">show all</a></div>',
+		"f_anota": "only {0} of the {1} items were selected;\nto select the full folder, first scroll to the bottom",
 
 		"f_dls": 'the file links in the current folder have\nbeen changed into download links',
+
+		"f_partial": "To safely download a file which is currently being uploaded, please click the file which has the same filename, but without the <code>.PARTIAL</code> file extension. Please press CANCEL or Escape to do this.\n\nPressing OK / Enter will ignore this warning and continue downloading the <code>.PARTIAL</code> scratchfile instead, which will almost definitely give you corrupted data.",
 
 		"ft_paste": "paste {0} items$NHotkey: ctrl-V",
 		"fr_eperm": 'cannot rename:\nyou do not have “move” permission in this folder',
@@ -290,6 +364,27 @@ var Ls = {
 		"fr_emore": "select at least one item to rename",
 		"fd_emore": "select at least one item to delete",
 		"fc_emore": "select at least one item to cut",
+		"fcp_emore": "select at least one item to copy to clipboard",
+
+		"fs_sc": "share the folder you're in",
+		"fs_ss": "share the selected files",
+		"fs_just1d": "you cannot select more than one folder,\nor mix files and folders in one selection",
+		"fs_abrt": "❌ abort",
+		"fs_rand": "🎲 rand.name",
+		"fs_go": "✅ create share",
+		"fs_name": "name",
+		"fs_src": "source",
+		"fs_pwd": "passwd",
+		"fs_exp": "expiry",
+		"fs_tmin": "min",
+		"fs_thrs": "hours",
+		"fs_tdays": "days",
+		"fs_never": "eternal",
+		"fs_pname": "optional link name; will be random if blank",
+		"fs_tsrc": "the file or folder to share",
+		"fs_ppwd": "optional password",
+		"fs_w8": "creating share...",
+		"fs_ok": "press <code>Enter/OK</code> to Clipboard\npress <code>ESC/Cancel</code> to Close",
 
 		"frt_dec": "may fix some cases of broken filenames\">url-decode",
 		"frt_rst": "reset modified filenames back to the original ones\">↺ reset",
@@ -297,6 +392,10 @@ var Ls = {
 		"frb_apply": "APPLY RENAME",
 		"fr_adv": "batch / metadata / pattern renaming\">advanced",
 		"fr_case": "case-sensitive regex\">case",
+		"fr_win": "windows-safe names; replace <code>&lt;&gt;:&quot;\\|?*</code> with japanese fullwidth characters\">win",
+		"fr_slash": "replace <code>/</code> with a character that doesn't cause new folders to be created\">no /",
+		"fr_re": "regex search pattern to apply to original filenames; capturing groups can be referenced in the format field below like &lt;code&gt;(1)&lt;/code&gt; and &lt;code&gt;(2)&lt;/code&gt; and so on",
+		"fr_fmt": "inspired by foobar2000:$N&lt;code&gt;(title)&lt;/code&gt; is replaced by song title,$N&lt;code&gt;[(artist) - ](title)&lt;/code&gt; skips [this] part if artist is blank$N&lt;code&gt;$lpad((tn),2,0)&lt;/code&gt; pads tracknumber to 2 digits",
 		"fr_pdel": "delete",
 		"fr_pnew": "save as",
 		"fr_pname": "provide a name for your new preset",
@@ -306,6 +405,7 @@ var Ls = {
 		"fr_tags": "tags for the selected files (read-only, just for reference):",
 		"fr_busy": "renaming {0} items...\n\n{1}",
 		"fr_efail": "rename failed:\n",
+		"fr_nchg": "{0} of the new names were altered due to <code>win</code> and/or <code>no /</code>\n\nOK to continue with these altered new names?",
 
 		"fd_ok": "delete OK",
 		"fd_err": "delete failed:\n",
@@ -317,13 +417,31 @@ var Ls = {
 		"fc_ok": "cut {0} items",
 		"fc_warn": 'cut {0} items\n\nbut: only <b>this</b> browser-tab can paste them\n(since the selection is so absolutely massive)',
 
-		"fp_ecut": "first cut some files / folders to paste / move\n\nnote: you can cut / paste across different browser tabs",
-		"fp_ename": "these {0} items cannot be moved here (names already exist):",
+		"fcc_ok": "copied {0} items to clipboard",
+		"fcc_warn": 'copied {0} items to clipboard\n\nbut: only <b>this</b> browser-tab can paste them\n(since the selection is so absolutely massive)',
+
+		"fp_apply": "use these names",
+		"fp_ecut": "first cut or copy some files / folders to paste / move\n\nnote: you can cut / paste across different browser tabs",
+		"fp_ename": "{0} items cannot be moved here because the names are already taken. Give them new names below to continue, or blank the name to skip them:",
+		"fcp_ename": "{0} items cannot be copied here because the names are already taken. Give them new names below to continue, or blank the name to skip them:",
+		"fp_emore": "there are still some filename collisions left to fix",
 		"fp_ok": "move OK",
+		"fcp_ok": "copy OK",
 		"fp_busy": "moving {0} items...\n\n{1}",
+		"fcp_busy": "copying {0} items...\n\n{1}",
+		"fp_abrt": "aborting...",
 		"fp_err": "move failed:\n",
+		"fcp_err": "copy failed:\n",
 		"fp_confirm": "move these {0} items here?",
+		"fcp_confirm": "copy these {0} items here?",
 		"fp_etab": 'failed to read clipboard from other browser tab',
+		"fp_name": "uploading a file from your device. Give it a name:",
+		"fp_both_m": '<h6>choose what to paste</h6><code>Enter</code> = Move {0} files from «{1}»\n<code>ESC</code> = Upload {2} files from your device',
+		"fcp_both_m": '<h6>choose what to paste</h6><code>Enter</code> = Copy {0} files from «{1}»\n<code>ESC</code> = Upload {2} files from your device',
+		"fp_both_b": '<a href="#" id="modal-ok">Move</a><a href="#" id="modal-ng">Upload</a>',
+		"fcp_both_b": '<a href="#" id="modal-ok">Copy</a><a href="#" id="modal-ng">Upload</a>',
+
+		"mk_noname": "type a name into the text field on the left before you do that :p",
 
 		"tv_load": "Loading text document:\n\n{0}\n\n{1}% ({2} of {3} MiB loaded)",
 		"tv_xe1": "could not load textfile:\n\nerror ",
@@ -333,11 +451,22 @@ var Ls = {
 		"tvt_dl": "download this file$NHotkey: Y\">💾 download",
 		"tvt_prev": "show previous document$NHotkey: i\">⬆ prev",
 		"tvt_next": "show next document$NHotkey: K\">⬇ next",
-		"tvt_sel": "select file &nbsp; ( for cut / delete / ... )$NHotkey: S\">sel",
+		"tvt_sel": "select file &nbsp; ( for cut / copy / delete / ... )$NHotkey: S\">sel",
 		"tvt_edit": "open file in text editor$NHotkey: E\">✏️ edit",
+		"tvt_tail": "monitor file for changes; show new lines in real time\">📡 follow",
+		"tvt_wrap": "word-wrap\">↵",
+		"tvt_atail": "lock scroll to bottom of page\">⚓",
+		"tvt_ctail": "decode terminal colors (ansi escape codes)\">🌈",
+		"tvt_ntail": "scrollback limit (how many bytes of text to keep loaded)",
 
+		"m3u_add1": "song added to m3u playlist",
+		"m3u_addn": "{0} songs added to m3u playlist",
+		"m3u_clip": "m3u playlist now copied to clipboard\n\nyou should create a new textfile named something.m3u and paste the playlist in that document; this will make it playable",
+
+		"gt_vau": "don't show videos, just play the audio\">🎧",
 		"gt_msel": "enable file selection; ctrl-click a file to override$N$N&lt;em&gt;when active: doubleclick a file / folder to open it&lt;/em&gt;$N$NHotkey: S\">multiselect",
-		"gt_full": "show uncropped thumbnails\">full",
+		"gt_crop": "center-crop thumbnails\">crop",
+		"gt_3x": "hi-res thumbnails\">3x",
 		"gt_zoom": "zoom",
 		"gt_chop": "chop",
 		"gt_sort": "sort by",
@@ -348,6 +477,7 @@ var Ls = {
 		"gt_c1": "truncate filenames more (show less)",
 		"gt_c2": "truncate filenames less (show more)",
 
+		"sm_w8": "searching...",
 		"sm_prev": "search results below are from a previous query:\n  ",
 		"sl_close": "close search results",
 		"sl_hits": "showing {0} hits",
@@ -371,10 +501,13 @@ var Ls = {
 		"s_t1": "tags contains &nbsp; (^=start, end=$)",
 		"s_a1": "specific metadata properties",
 
-		"md_eshow": "cannot show ",
+		"md_eshow": "cannot render ",
 		"md_off": "[📜<em>readme</em>] disabled in [⚙️] -- document hidden",
 
+		"badreply": "Failed to parse reply from server",
+
 		"xhr403": "403: Access denied\n\ntry pressing F5, maybe you got logged out",
+		"xhr0": "unknown (probably lost connection to server, or server is offline)",
 		"cf_ok": "sorry about that -- DD" + wah + "oS protection kicked in\n\nthings should resume in about 30 sec\n\nif nothing happens, hit F5 to reload the page",
 		"tl_xe1": "could not list subfolders:\n\nerror ",
 		"tl_xe2": "404: Folder not found",
@@ -395,7 +528,7 @@ var Ls = {
 		"fz_zipd": "zip with traditional cp437 filenames, for really old software",
 		"fz_zipc": "cp437 with crc32 computed early,$Nfor MS-DOS PKZIP v2.04g (october 1993)$N(takes longer to process before download can start)",
 
-		"un_m1": "you can delete your recent uploads below",
+		"un_m1": "you can delete your recent uploads (or abort unfinished ones) below",
 		"un_upd": "refresh",
 		"un_m4": "or share the files visible below:",
 		"un_ulist": "show",
@@ -404,42 +537,60 @@ var Ls = {
 		"un_fclr": "clear filter",
 		"un_derr": 'unpost-delete failed:\n',
 		"un_f5": 'something broke, please try a refresh or hit F5',
+		"un_uf5": "sorry but you have to refresh the page (for example by pressing F5 or CTRL-R) before this upload can be aborted",
+		"un_nou": '<b>warning:</b> server too busy to show unfinished uploads; click the "refresh" link in a bit',
+		"un_noc": '<b>warning:</b> unpost of fully uploaded files is not enabled/permitted in server config',
 		"un_max": "showing first 2000 files (use the filter)",
-		"un_avail": "{0} uploads can be deleted",
-		"un_m2": "sorted by upload time &ndash; most recent first:",
+		"un_avail": "{0} recent uploads can be deleted<br />{1} unfinished ones can be aborted",
+		"un_m2": "sorted by upload time; most recent first:",
 		"un_no1": "sike! no uploads are sufficiently recent",
 		"un_no2": "sike! no uploads matching that filter are sufficiently recent",
 		"un_next": "delete the next {0} files below",
+		"un_abrt": "abort",
 		"un_del": "delete",
 		"un_m3": "loading your recent uploads...",
 		"un_busy": "deleting {0} files...",
+		"un_clip": "{0} links copied to clipboard",
 
 		"u_https1": "you should",
 		"u_https2": "switch to https",
 		"u_https3": "for better performance",
 		"u_ancient": 'your browser is impressively ancient -- maybe you should <a href="#" onclick="goto(\'bup\')">use bup instead</a>',
 		"u_nowork": "need firefox 53+ or chrome 57+ or iOS 11+",
+		"tail_2old": "need firefox 105+ or chrome 71+ or iOS 14.5+",
+		"u_nodrop": 'your browser is too old for drag-and-drop uploading',
+		"u_notdir": "that's not a folder!\n\nyour browser is too old,\nplease try dragdrop instead",
 		"u_uri": "to dragdrop images from other browser windows,\nplease drop it onto the big upload button",
 		"u_enpot": 'switch to <a href="#">potato UI</a> (may improve upload speed)',
 		"u_depot": 'switch to <a href="#">fancy UI</a> (may reduce upload speed)',
 		"u_gotpot": 'switching to the potato UI for improved upload speed,\n\nfeel free to disagree and switch back!',
+		"u_pott": "<p>files: &nbsp; <b>{0}</b> finished, &nbsp; <b>{1}</b> failed, &nbsp; <b>{2}</b> busy, &nbsp; <b>{3}</b> queued</p>",
 		"u_ever": "this is the basic uploader; up2k needs at least<br>chrome 21 // firefox 13 // edge 12 // opera 12 // safari 5.1",
 		"u_su2k": 'this is the basic uploader; <a href="#" id="u2yea">up2k</a> is better',
+		"u_uput": 'optimize for speed (skip checksum)',
 		"u_ewrite": 'you do not have write-access to this folder',
 		"u_eread": 'you do not have read-access to this folder',
 		"u_enoi": 'file-search is not enabled in server config',
+		"u_enoow": "overwrite will not work here; need Delete-permission",
 		"u_badf": 'These {0} files (of {1} total) were skipped, possibly due to filesystem permissions:\n\n',
 		"u_blankf": 'These {0} files (of {1} total) are blank / empty; upload them anyways?\n\n',
 		"u_applef": 'Because the apple/macos filter is enabled ("up2k switches" in settings),\nsome files ({0} out of {1} in total) will be excluded / skipped.\n\nPress <code>OK/Enter</code> to SKIP the following files,\nPress <code>Cancel/ESC</code> to NOT exclude, and UPLOAD those as well:\n\n',
 		"u_just1": '\nMaybe it works better if you select just one file',
-		"u_ff_many": "This amount of files <em>may</em> cause Firefox to skip some files, or crash.\nPlease try again with fewer files (or use Chrome) if that happens.",
+		"u_ff_many": "if you're using <b>Linux / MacOS / Android,</b> then this amount of files <a href=\"https://bugzilla.mozilla.org/show_bug.cgi?id=1790500\" target=\"_blank\"><em>may</em> crash Firefox!</a>\nif that happens, please try again (or use Chrome).",
 		"u_up_life": "This upload will be deleted from the server\n{0} after it completes",
 		"u_asku": 'upload these {0} files to <code>{1}</code>',
 		"u_unpt": "you can undo / delete this upload using the top-left 🧯",
+		"u_bigtab": 'about to show {0} files\n\nthis may crash your browser, are you sure?',
+		"u_scan": 'Scanning files...',
+		"u_dirstuck": 'directory iterator got stuck trying to access the following {0} items; will skip:',
 		"u_etadone": 'Done ({0}, {1} files)',
 		"u_etaprep": '(preparing to upload)',
 		"u_hashdone": 'hashing done',
 		"u_hashing": 'hash',
+		"u_hs": 'handshaking...',
+		"u_started": "the files are now being uploaded; see [🚀]",
+		"u_dupdefer": "duplicate; will be processed after all other files",
+		"u_actx": "click this text to prevent loss of<br />performance when switching to other windows/tabs",
 		"u_fixed": "OK!&nbsp; Fixed it 👍",
 		"u_cuerr": "failed to upload chunk {0} of {1};\nprobably harmless, continuing\n\nfile: {2}",
 		"u_cuerr2": "server rejected upload (chunk {0} of {1});\nwill retry later\n\nfile: {2}\n\nerror ",
@@ -449,14 +600,16 @@ var Ls = {
 		"u_ehsinit": "server rejected the request to initiate upload; retrying...",
 		"u_eneths": "network error while performing upload handshake; retrying...",
 		"u_enethd": "network error while testing target existence; retrying...",
+		"u_cbusy": "waiting for server to trust us again after a network glitch...",
 		"u_ehsdf": "server ran out of disk space!\n\nwill keep retrying, in case someone\nfrees up enough space to continue",
 		"u_emtleak1": "it looks like your webbrowser may have a memory leak;\nplease",
 		"u_emtleak2": ' <a href="{0}">switch to https (recommended)</a> or ',
 		"u_emtleak3": ' ',
-		"u_emtleakc": 'try the following:\n<ul><li>hit <code>F5</code> to refresh the page</li><li>then disable the &nbsp;<code>mt</code>&nbsp; button in the &nbsp;<code>⚙️ settings</code></li><li>and try that upload again</li></ul>Uploads will be a bit slower, but oh well.\nSorry for the trouble !\n\nPS: chrome v107 <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1354816">has a bugfix</a> for this',
-		"u_emtleakf": 'try the following:\n<ul><li>hit <code>F5</code> to refresh the page</li><li>then enable <code>🥔</code> (potato) in the upload UI<li>and try that upload again</li></ul>\nPS: firefox <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=1790500">will hopefully have a bugfix</a> at some point',
+		"u_emtleakc": 'try the following:\n<ul><li>hit <code>F5</code> to refresh the page</li><li>then disable the &nbsp;<code>mt</code>&nbsp; button in the &nbsp;<code>⚙️ settings</code></li><li>and try that upload again</li></ul>Uploads will be a bit slower, but oh well.\nSorry for the trouble !\n\nPS: chrome v107 <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1354816" target="_blank">has a bugfix</a> for this',
+		"u_emtleakf": 'try the following:\n<ul><li>hit <code>F5</code> to refresh the page</li><li>then enable <code>🥔</code> (potato) in the upload UI<li>and try that upload again</li></ul>\nPS: firefox <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=1790500" target="_blank">will hopefully have a bugfix</a> at some point',
 		"u_s404": "not found on server",
 		"u_expl": "explain",
+		"u_maxconn": "most browsers limit this to 6, but firefox lets you raise it with <code>connections-per-server</code> in <code>about:config</code>",
 		"u_tu": '<p class="warn">WARNING: turbo enabled, <span>&nbsp;client may not detect and resume incomplete uploads; see turbo-button tooltip</span></p>',
 		"u_ts": '<p class="warn">WARNING: turbo enabled, <span>&nbsp;search results can be incorrect; see turbo-button tooltip</span></p>',
 		"u_turbo_c": "turbo is disabled in server config",
@@ -471,6 +624,7 @@ var Ls = {
 		"ue_la": 'you are currently logged in as "{0}"',
 		"ue_sr": 'you are currently in file-search mode\n\nswitch to upload-mode by clicking the magnifying glass 🔎 (next to the big SEARCH button), and try uploading again\n\nsorry',
 		"ue_ta": 'try uploading again, it should work now',
+		"ue_ab": "this file is already being uploaded into another folder, and that upload must be completed before the file can be uploaded elsewhere.\n\nYou can abort and forget the initial upload using the top-left 🧯",
 		"ur_1uo": "OK: File uploaded successfully",
 		"ur_auo": "OK: All {0} files uploaded successfully",
 		"ur_1so": "OK: File found on server",
@@ -968,9 +1122,44 @@ var Ls = {
 		"lang_set": "passer det å laste siden på nytt?",
 	},
 };
-var LANGS = ["eng", "nor"],
-	L = Ls[sread("cpp_lang", LANGS) || lang] || Ls.eng || Ls.nor;
 
+var LANGN = [
+	["eng", "English"],
+	["nor", "Norsk"],
+	["chi", "中文"],
+	["cze", "Čeština"],
+	["deu", "Deutsch"],
+	["epo", "Esperanto"],
+	["fin", "Suomi"],
+	["fra", "français"],
+	["grc", "Ελληνικά"],
+	["ita", "Italiano"],
+	["kor", "한국어"],
+	["nld", "Nederlands"],
+	["nno", "Nynorsk"],
+	["pol", "Polski"],
+	["por", "Português"],
+	["rus", "Русский"],
+	["spa", "Español"],
+	["swe", "Svenska"],
+	["tur", "Türkçe"],
+	["ukr", "Українська"],
+];
+
+if (window.langmod)
+	langmod();
+
+var L = Ls[lang] || Ls.eng, LANGS = [];
+for (var a = 0; a < LANGN.length; a++)
+	LANGS.push(LANGN[a][0]);
+
+
+function langtest() {
+	var n = LANGS.length - 1;
+	for (var a = 1; a < LANGS.length; a++) 
+		import_js(SR + '/.cpr/tl/' + LANGS[a] + '.js', function () { if (!--n) langtest2(); });
+}
+function langtest2() {
 for (var a = 0; a < LANGS.length; a++) {
 	for (var b = a + 1; b < LANGS.length; b++) {
 		var i1 = Object.keys(Ls[LANGS[a]]).length > Object.keys(Ls[LANGS[b]]).length ? a : b,
@@ -979,14 +1168,17 @@ for (var a = 0; a < LANGS.length; a++) {
 			t2 = Ls[LANGS[i2]];
 
 		for (var k in t1)
-			if (!t2[k]) {
+			if (!t2[k] && !/^ht_.5$/.test(k)) {
 				console.log("E missing TL", LANGS[i2], k);
 				t2[k] = t1[k];
 			}
 	}
 }
+}
 
-if (!has(LANGS, lang))
+
+
+if (!Ls[lang])
 	alert('unsupported --lang "' + lang + '" specified in server args;\nplease use one of these: ' + LANGS);
 
 modal.load();
@@ -994,16 +1186,16 @@ modal.load();
 
 // toolbar
 ebi('ops').innerHTML = (
-	'<a href="#" data-dest="" tt="' + L.ot_close + '">--</a>' +
-	'<a href="#" data-perm="read" data-dep="idx" data-dest="search" tt="' + L.ot_search + '">🔎</a>' +
-	(have_del && have_unpost ? '<a href="#" data-dest="unpost" data-dep="idx" tt="' + L.ot_unpost + '">🧯</a>' : '') +
-	'<a href="#" data-dest="up2k">🚀</a>' +
-	'<a href="#" data-perm="write" data-dest="bup" tt="' + L.ot_bup + '">🎈</a>' +
-	'<a href="#" data-perm="write" data-dest="mkdir" tt="' + L.ot_mkdir + '">📂</a>' +
-	'<a href="#" data-perm="read write" data-dest="new_md" tt="' + L.ot_md + '">📝</a>' +
-	'<a href="#" data-perm="write" data-dest="msg" tt="' + L.ot_msg + '">📟</a>' +
-	'<a href="#" data-dest="player" tt="' + L.ot_mp + '">🎺</a>' +
-	'<a href="#" data-dest="cfg" tt="' + L.ot_cfg + '">⚙️</a>' +
+	'<a href="#" id="opa_x" data-dest="" tt="' + L.ot_close + '">--</a>' +
+	'<a href="#" id="opa_srch" data-perm="read" data-dep="idx" data-dest="search" tt="' + L.ot_search + '">🔎</a>' +
+	(have_del ? '<a href="#" id="opa_del" data-perm="write" data-dest="unpost" tt="' + L.ot_unpost + '">🧯</a>' : '') +
+	'<a href="#" id="opa_up" data-dest="up2k">🚀</a>' +
+	'<a href="#" id="opa_bup" data-perm="write" data-dest="bup" tt="' + L.ot_bup + '">🎈</a>' +
+	'<a href="#" id="opa_mkd" data-perm="write" data-dest="mkdir" tt="' + L.ot_mkdir + '">📂</a>' +
+	'<a href="#" id="opa_md" data-perm="read write" data-dest="new_md" tt="' + L.ot_md + '">📝</a>' +
+	'<a href="#" id="opa_msg" data-dest="msg" tt="' + L.ot_msg + '">📟</a>' +
+	'<a href="#" id="opa_auc" data-dest="player" tt="' + L.ot_mp + '">🎺</a>' +
+	'<a href="#" id="opa_cfg" data-dest="cfg" tt="' + L.ot_cfg + '">⚙️</a>' +
 	(IE ? '<span id="noie">' + L.ot_noie + '</span>' : '') +
 	'<div id="opdesc"></div>'
 );
@@ -1014,10 +1206,14 @@ ebi('widget').innerHTML = (
 	'<div id="wtoggle">' +
 	'<span id="wfs"></span>' +
 	'<span id="wfm"><a' +
+	' href="#" id="fshr" tt="' + L.wt_shr + '">📨<span>share</span></a><a' +
 	' href="#" id="fren" tt="' + L.wt_ren + '">✎<span>name</span></a><a' +
 	' href="#" id="fdel" tt="' + L.wt_del + '">⌫<span>del.</span></a><a' +
 	' href="#" id="fcut" tt="' + L.wt_cut + '">✂<span>cut</span></a><a' +
+	' href="#" id="fcpy" tt="' + L.wt_cpy + '">⧉<span>copy</span></a><a' +
 	' href="#" id="fpst" tt="' + L.wt_pst + '">📋<span>paste</span></a>' +
+	'</span><span id="wzip1"><a' +
+	' href="#" id="zip1" tt="' + L.wt_zip1 + '">📦<span>zip</span></a>' +
 	'</span><span id="wzip"><a' +
 	' href="#" id="selall" tt="' + L.wt_selall + '">sel.<br />all</a><a' +
 	' href="#" id="selinv" tt="' + L.wt_selinv + '">sel.<br />inv.</a><a' +
@@ -1026,6 +1222,9 @@ ebi('widget').innerHTML = (
 	'</span><span id="wnp"><a' +
 	' href="#" id="npirc" tt="' + L.wt_npirc + '">📋<span>irc</span></a><a' +
 	' href="#" id="nptxt" tt="' + L.wt_nptxt + '">📋<span>txt</span></a>' +
+	'</span><span id="wm3u"><a' +
+	' href="#" id="m3ua" tt="' + L.wt_m3ua + '">📻<span>add</span></a><a' +
+	' href="#" id="m3uc" tt="' + L.wt_m3uc + '">📻<span>copy</span></a>' +
 	'</span><a' +
 	'	href="#" id="wtgrid" tt="' + L.wt_grid + '">田</a><a' +
 	'	href="#" id="wtico">♫</a>' +
@@ -1037,7 +1236,7 @@ ebi('widget').innerHTML = (
 	'	<canvas id="barbuf"></canvas>' +
 	'</div>' +
 	'<div id="np_inf">' +
-	'	<img id="np_img"></span>' +
+	'	<img id="np_img" />' +
 	'	<span id="np_url"></span>' +
 	'	<span id="np_circle"></span>' +
 	'	<span id="np_album"></span>' +
@@ -1070,8 +1269,8 @@ ebi('op_up2k').innerHTML = (
 	'			<label for="u2rand" tt="' + L.ut_rand + '">🎲</label>\n' +
 	'		</td>\n' +
 	'		<td class="c" rowspan="2">\n' +
-	'			<input type="checkbox" id="u2ts" />\n' +
-	'			<label for="u2ts" tt="' + L.ut_u2ts + '">📅</a>\n' +
+	'			<input type="checkbox" id="u2ow" />\n' +
+	'			<label for="u2ow" tt="' + L.ut_ow + '">?</a>\n' +
 	'		</td>\n' +
 	'		<td class="c" data-perm="read" data-dep="idx" rowspan="2">\n' +
 	'			<input type="checkbox" id="fsearch" />\n' +
@@ -1135,6 +1334,10 @@ ebi('op_up2k').innerHTML = (
 
 ebi('wrap').insertBefore(mknod('div', 'lazy'), ebi('epi'));
 
+var x = ebi('bbsw');
+x.parentNode.insertBefore(mknod('div', null,
+	'<input type="checkbox" id="uput" name="uput"><label for="uput">' + L.u_uput + '</label>'), x);
+
 
 (function () {
 	var o = mknod('div');
@@ -1155,26 +1358,45 @@ ebi('op_cfg').innerHTML = (
 	'<div>\n' +
 	'	<h3>' + L.cl_opts + '</h3>\n' +
 	'	<div>\n' +
-	'		<a id="tooltips" class="tgl btn" href="#" tt="◔ ◡ ◔">ℹ️ tooltips</a>\n' +
-	'		<a id="griden" class="tgl btn" href="#" tt="' + L.wt_grid + '">田 the grid</a>\n' +
-	'		<a id="thumbs" class="tgl btn" href="#" tt="' + L.ct_thumb + '">🖼️ thumbs</a>\n' +
-	'		<a id="csel" class="tgl btn" href="#" tt="' + L.ct_csel + '">sel</a>\n' +
-	'		<a id="dotfiles" class="tgl btn" href="#" tt="' + L.ct_dots + '">dotfiles</a>\n' +
-	'		<a id="dir1st" class="tgl btn" href="#" tt="' + L.ct_dir1st + '">📁 first</a>\n' +
-	'		<a id="ireadme" class="tgl btn" href="#" tt="' + L.ct_readme + '">📜 readme</a>\n' +
-	'		<a id="idxh" class="tgl btn" href="#" tt="' + L.ct_idxh + '">htm</a>\n' +
-	'		<a id="sbars" class="tgl btn" href="#" tt="' + L.ct_sbars + '">⟊</a>\n' +
+	'		<a id="tooltips" class="tgl btn" href="#" tt="' + L.ct_ttips + '</a>\n' +
+	'		<a id="griden" class="tgl btn" href="#" tt="' + L.wt_grid + '">' + L.ct_grid + '</a>\n' +
+	'		<a id="thumbs" class="tgl btn" href="#" tt="' + L.ct_thumb + '</a>\n' +
+	'		<a id="csel" class="tgl btn" href="#" tt="' + L.ct_csel + '</a>\n' +
+	'		<a id="ihop" class="tgl btn" href="#" tt="' + L.ct_ihop + '</a>\n' +
+	'		<a id="dotfiles" class="tgl btn" href="#" tt="' + L.ct_dots + '</a>\n' +
+	'		<a id="qdel" class="tgl btn" href="#" tt="' + L.ct_qdel + '</a>\n' +
+	'		<a id="dir1st" class="tgl btn" href="#" tt="' + L.ct_dir1st + '</a>\n' +
+	'		<a id="nsort" class="tgl btn" href="#" tt="' + L.ct_nsort + '</a>\n' +
+	'		<a id="utctid" class="tgl btn" href="#" tt="' + L.ct_utc + '</a>\n' +
+	'		<a id="ireadme" class="tgl btn" href="#" tt="' + L.ct_readme + '</a>\n' +
+	'		<a id="idxh" class="tgl btn" href="#" tt="' + L.ct_idxh + '</a>\n' +
+	'		<a id="sbars" class="tgl btn" href="#" tt="' + L.ct_sbars + '</a>\n' +
 	'	</div>\n' +
 	'</div>\n' +
 	'<div>\n' +
+	'	<h3>' + L.cl_hfsz + '</h3>\n' +
+	'	<div><select id="fszfmt">\n' +
+	'		<option value="0">0 ┃ 1234567</option>\n' +
+	'		<option value="1">1 ┃ 1 234 567</option>\n' +
+	'		<option value="2">2- ┃ 1.18 M</option>\n' +
+	'		<option value="2c">2c ┃ 1.18 M</option>\n' +
+	'		<option value="3">3- ┃ 1.2 M</option>\n' +
+	'		<option value="3c">3c ┃ 1.2 M</option>\n' +
+	'		<option value="4">4- ┃ 1.18 MB</option>\n' +
+	'		<option value="4c">4c ┃ 1.18 MB</option>\n' +
+	'		<option value="5">5- ┃ 1.2 MB</option>\n' +
+	'		<option value="5c">5c ┃ 1.2 MB</option>\n' +
+	'		<option value="fuzzy">fuzzy</option>\n' +
+	'	</select></div>\n' +
+	'</div>\n' +
+	'<div>\n' +
 	'	<h3>' + L.cl_themes + '</h3>\n' +
-	'	<div id="themes">\n' +
+	'	<div><select id="themes"></select></div>\n' +
 	'	</div>\n' +
 	'</div>\n' +
 	'<div>\n' +
 	'	<h3>' + L.cl_langs + '</h3>\n' +
-	'	<div id="langs">\n' +
-	'	</div>\n' +
+	'	<div><select id="langs"></select></div>\n' +
 	'</div>\n' +
 	(have_zip ? (
 		'<div><h3>' + L.cl_ziptype + '</h3><div id="arc_fmt"></div></div>\n'
@@ -1182,6 +1404,14 @@ ebi('op_cfg').innerHTML = (
 	'<div>\n' +
 	'	<h3>' + L.cl_uopts + '</h3>\n' +
 	'	<div>\n' +
+	'		<a id="ask_up" class="tgl btn" href="#" tt="' + L.ut_ask + '</a>\n' +
+	'		<a id="u2ts" class="tgl btn" href="#" tt="' + L.ut_u2ts + '</a>\n' +
+	'		<a id="umod" class="tgl btn" href="#" tt="' + L.cut_umod + '</a>\n' +
+	'		<a id="hashw" class="tgl btn" href="#" tt="' + L.cut_mt + '</a>\n' +
+	'		<a id="nosubtle" class="tgl btn" href="#" tt="' + L.cut_wasm + '</a>\n' +
+	'		<a id="u2turbo" class="tgl btn ttb" href="#" tt="' + L.cut_turbo + '</a>\n' +
+	'		<a id="u2tdate" class="tgl btn ttb" href="#" tt="' + L.cut_datechk + '</a>\n' +
+	'		<input type="text" id="u2szg" value="" ' + NOAC + ' style="width:3em" tt="' + L.cut_u2sz + '" />' +
 	'		<a id="ask_up" class="tgl btn" href="#" tt="' + L.ut_ask + '">💭</a>\n' +
 	'		<a id="hashw" class="tgl btn" href="#" tt="' + L.cut_mt + '">mt</a>\n' +
 	'		<a id="u2turbo" class="tgl btn ttb" href="#" tt="' + L.cut_turbo + '">turbo</a>\n' +
@@ -1211,7 +1441,14 @@ ebi('op_cfg').innerHTML = (
 	'		</td>\n' +
 	'	</div>\n' +
 	'</div>\n' +
-	'<div><h3>' + L.cl_keytype + '</h3><div id="key_notation"></div></div>\n' +
+	'<div>\n' +
+	'	<h3>' + L.cl_hsort + '</h3>\n' +
+	'	<div>\n' +
+	'		<input type="text" id="hsortn" value="" ' + NOAC + ' style="width:3em" tt="' + L.cdt_hsort + '" />' +
+	'		</td>\n' +
+	'	</div>\n' +
+	'</div>\n' +
+	'<div><h3>' + L.cl_keytype + '</h3><div><select id="key_notation"></select></div></div>\n' +
 	'<div><h3>' + L.cl_hiddenc + ' &nbsp;' + (MOBILE ? '<a href="#" id="hcolsh">' + L.cl_hidec + '</a> / ' : '') + '<a href="#" id="hcolsr">' + L.cl_reset + '</a></h3><div id="hcols"></div></div>'
 );
 
@@ -1311,15 +1548,23 @@ function goto(dest) {
 }
 
 
+var m = SPINNER.split(','),
+	SPINNER_CSS = SPINNER.slice(1 + m[0].length);
+SPINNER = m[0];
+
+
 var SBW, SBH;  // scrollbar size
-(function () {
+function read_sbw() {
 	var el = mknod('div');
-	el.style.cssText = 'overflow:scroll;width:100px;height:100px';
+	el.style.cssText = 'overflow:scroll;width:100px;height:100px;position:absolute;top:0;left:0';
 	document.body.appendChild(el);
 	SBW = el.offsetWidth - el.clientWidth;
 	SBH = el.offsetHeight - el.clientHeight;
 	document.body.removeChild(el);
-})();
+	setcvar('--sbw', SBW + 'px');
+	setcvar('--sbh', SBH + 'px');
+}
+onresize100.add(read_sbw, true);
 
 
 var have_webp = sread('have_webp');
@@ -1360,9 +1605,63 @@ function set_files_html(html) {
 
 // actx breaks background album playback on ios
 var ACtx = !IPHONE && (window.AudioContext || window.webkitAudioContext),
-	noih = /[?&]v\b/.exec('' + location),
+	ACB = sread('au_cbv') || 1,
 	hash0 = location.hash,
-	mp;
+	sloc0 = '' + location,
+	noih = /[?&]v\b/.exec(sloc0),
+	fullui = /[?&]fullui\b/.exec(sloc0),
+	nonav = !fullui && (/[?&]nonav\b/.exec(sloc0) || window.ui_nonav),
+	notree = !fullui && (/[?&]notree\b/.exec(sloc0) || window.ui_notree || nonav),
+	dbg_kbd = /[?&]dbgkbd\b/.exec(sloc0),
+	abrt_key = "",
+	can_shr = false,
+	in_shr = false,
+	rtt = null,
+	srvinf = "",
+	ldks = [],
+	dks = {},
+	dk, mp;
+
+
+if (location.pathname.indexOf('//') === 0)
+	hist_replace(location.pathname.replace(/^\/+/, '/'));
+
+
+if (window.og_fn) {
+	hash0 = 1;
+	hist_replace(vsplit(get_evpath())[0]);
+}
+
+
+var hsortn = ebi('hsortn').value = icfg_get('hsortn', dhsortn);
+ebi('hsortn').oninput = function (e) {
+	var n = parseInt(this.value);
+	swrite('hsortn', hsortn = (isNum(n) ? n : dhsortn));
+};
+(function() {
+	var args = ('' + hash0).split(/,sort/g);
+	if (args.length < 2)
+		return;
+
+	var ret = [];
+	for (var a = 1; a < args.length; a++) {
+		var t = '', n = 1, z = args[a].split(',')[0];
+		if (z.startsWith('-')) {
+			z = z.slice(1);
+			n = -1;
+		}
+		if (z == "sz" || z.indexOf('/.') + 1)
+			t = "int";
+		ret.push([z, n, t]);
+	}
+	n = Math.min(ret.length, hsortn);
+	if (n) {
+		var cmp = jread('fsort', []);
+		if (JSON.stringify(ret.slice(0, n) !=
+			JSON.stringify(cmp.slice(0, n))))
+			jwrite('fsort', ret);
+	}
+})();
 
 
 var mpl = (function () {
@@ -1370,10 +1669,17 @@ var mpl = (function () {
 
 	ebi('op_player').innerHTML = (
 		'<div><h3>' + L.cl_opts + '</h3><div>' +
+		'<a href="#" class="tgl btn" id="au_loop" tt="' + L.mt_loop + '</a>' +
+		'<a href="#" class="tgl btn" id="au_one" tt="' + L.mt_one + '</a>' +
+		'<a href="#" class="tgl btn" id="au_shuf" tt="' + L.mt_shuf + '</a>' +
+		'<a href="#" class="tgl btn" id="au_aplay" tt="' + L.mt_aplay + '</a>' +
 		'<a href="#" class="tgl btn" id="au_preload" tt="' + L.mt_preload + '</a>' +
+		'<a href="#" class="tgl btn" id="au_prescan" tt="' + L.mt_prescan + '</a>' +
 		'<a href="#" class="tgl btn" id="au_fullpre" tt="' + L.mt_fullpre + '</a>' +
+		'<a href="#" class="tgl btn" id="au_fau" tt="' + L.mt_fau + '</a>' +
 		'<a href="#" class="tgl btn" id="au_waves" tt="' + L.mt_waves + '</a>' +
 		'<a href="#" class="tgl btn" id="au_npclip" tt="' + L.mt_npclip + '</a>' +
+		'<a href="#" class="tgl btn" id="au_m3u_c" tt="' + L.mt_m3u_c + '</a>' +
 		'<a href="#" class="tgl btn" id="au_os_ctl" tt="' + L.mt_octl + '</a>' +
 		'<a href="#" class="tgl btn" id="au_os_seek" tt="' + L.mt_oseek + '</a>' +
 		'<a href="#" class="tgl btn" id="au_osd_cv" tt="' + L.mt_oscv + '</a>' +
@@ -1381,9 +1687,14 @@ var mpl = (function () {
 		'<a href="#" class="tgl btn" id="au_compact" tt="' + L.mt_compact + '</a>' +
 		'</div></div>' +
 
+		'<div><h3>' + L.ml_btns + '</h3><div>' +
+		'<a href="#" class="btn" id="au_uncache" tt="' + L.mt_uncache + '</a>' +
+		'</div></div>' +
+
 		'<div><h3>' + L.ml_pmode + '</h3><div id="pb_mode">' +
 		'<a href="#" class="tgl btn" m="loop" tt="' + L.mt_mloop + '</a>' +
 		'<a href="#" class="tgl btn" m="next" tt="' + L.mt_mnext + '</a>' +
+		'<a href="#" class="tgl btn" m="stop" tt="' + L.mt_mstop + '</a>' +
 		'</div></div>' +
 
 		(have_acode ? (
@@ -1391,6 +1702,14 @@ var mpl = (function () {
 			'<a href="#" id="ac_flac" class="tgl btn" tt="' + L.mt_cflac + '</a>' +
 			'<a href="#" id="ac_aac" class="tgl btn" tt="' + L.mt_caac + '</a>' +
 			'<a href="#" id="ac_oth" class="tgl btn" tt="' + L.mt_coth + '</a>' +
+			'</div></div>' +
+			'<div><h3>' + L.ml_tcode2 + '</h3><div>' +
+			'<a href="#" id="ac2opus" class="tgl btn" tt="' + L.mt_c2opus + '</a>' +
+			'<a href="#" id="ac2owa" class="tgl btn" tt="' + L.mt_c2owa + '</a>' +
+			'<a href="#" id="ac2caf" class="tgl btn" tt="' + L.mt_c2caf + '</a>' +
+			'<a href="#" id="ac2mp3" class="tgl btn" tt="' + L.mt_c2mp3 + '</a>' +
+			'<a href="#" id="ac2flac" class="tgl btn" tt="' + L.mt_c2flac + '</a>' +
+			'<a href="#" id="ac2wav" class="tgl btn" tt="' + L.mt_c2wav + '</a>' +
 			'</div></div>'
 		) : '') +
 
@@ -1403,12 +1722,35 @@ var mpl = (function () {
 		'');
 
 	var r = {
-		"pb_mode": (sread('pb_mode', ['loop', 'next']) || 'next').split('-')[0],
+		"pb_mode": (sread('pb_mode', ['loop', 'next', 'stop']) || 'next').split('-')[0],
 		"os_ctl": bcfg_get('au_os_ctl', have_mctl) && have_mctl,
 		'traversals': 0,
+		'm3ut': '#EXTM3U\n',
 	};
+	bcfg_bind(r, 'one', 'au_one', false, function (v) {
+		if (mp.au)
+			mp.au.loop = !v && r.loop;
+	});
+	bcfg_bind(r, 'loop', 'au_loop', false, function (v) {
+		if (mp.au)
+			mp.au.loop = v;
+	});
+	bcfg_bind(r, 'shuf', 'au_shuf', false, function () {
+		mp.read_order();  // don't bind
+	});
+	bcfg_bind(r, 'aplay', 'au_aplay', true);
 	bcfg_bind(r, 'preload', 'au_preload', true);
+	bcfg_bind(r, 'prescan', 'au_prescan', true);
 	bcfg_bind(r, 'fullpre', 'au_fullpre', false);
+	bcfg_bind(r, 'fau', 'au_fau', MOBILE && !IPHONE, function (v) {
+		mp.nopause();
+		if (mp.fau) {
+			mp.fau.pause();
+			mp.fau = mpo.fau = null;
+			console.log('stop fau');
+		}
+		mp.init_fau();
+	});
 	bcfg_bind(r, 'waves', 'au_waves', true, function (v) {
 		if (!v) pbar.unwave();
 	});
@@ -1416,6 +1758,9 @@ var mpl = (function () {
 	bcfg_bind(r, 'osd_cv', 'au_osd_cv', true, announce);
 	bcfg_bind(r, 'clip', 'au_npclip', false, function (v) {
 		clmod(ebi('wtoggle'), 'np', v && mp.au);
+	});
+	bcfg_bind(r, 'm3uen', 'au_m3u_c', false, function (v) {
+		clmod(ebi('wtoggle'), 'm3u', v && (mp.au || msel.getsel().length));
 	});
 	bcfg_bind(r, 'follow', 'au_follow', false, setaufollow);
 	bcfg_bind(r, 'ac_flac', 'ac_flac', true);
@@ -1428,6 +1773,14 @@ var mpl = (function () {
 		ebi('au_fullpre').style.display = 'none';
 		r.fullpre = false;
 	}
+
+	ebi('au_uncache').onclick = function (e) {
+		ev(e);
+		ACB = (Date.now() % 46656).toString(36);
+		swrite('au_cbv', ACB);
+		reload_mp();
+		toast.inf(5, L.mm_uncache);
+	};
 
 	ebi('au_os_ctl').onclick = function (e) {
 		ev(e);
@@ -1467,26 +1820,87 @@ var mpl = (function () {
 	set_tint();
 
 	r.acode = function (url) {
-		var c = true;
+		var c = true,
+			cs = url.split('?')[0];
+
 		if (!have_acode)
 			c = false;
-		else if (/\.(wav|flac)$/i.exec(url))
+		else if (/\.(wav|flac)$/i.exec(cs))
 			c = r.ac_flac;
-		else if (/\.(aac|m4a)$/i.exec(url))
+		else if (/\.(aac|m4a)$/i.exec(cs))
 			c = r.ac_aac;
-		else if (/\.opus$/i.exec(url) && !can_ogg)
+		else if (/\.(oga|ogg|opus)$/i.exec(cs) && (!can_ogg || mpl.ac2 == 'mp3'))
 			c = true;
-		else if (re_au_native.exec(url))
+		else if (re_au_native.exec(cs))
 			c = false;
 
+		// allow flac->flac (bitstream fixup)
 		if (!c)
 			return url;
 
-		return url + (url.indexOf('?') < 0 ? '?' : '&') + 'th=' + (can_ogg ? 'opus' : 'caf');
+		return addq(url, 'th=' + r.ac2);
+	};
+
+	r.set_ac2 = function () {
+		r.init_ac2(this.getAttribute('id').split('ac2')[1]);
+	};
+
+	r.init_ac2 = function (v) {
+		if (!window.have_acode) {
+			r.ac2 = 'opus';
+			return;
+		}
+
+		var dv = can_ogg ? 'opus' :
+				can_caf ? 'caf' : 'mp3',
+			fmts = ['opus', 'owa', 'caf', 'mp3', 'flac', 'wav'],
+			btns = [];
+
+		if (v === dv)
+			toast.ok(5, L.mt_c2ok);
+		else if (v)
+			toast.inf(10, L.mt_c2nd);
+
+		if ((v == 'opus' && !can_ogg) ||
+			(v == 'caf' && !can_caf) ||
+			(v == 'owa' && !can_owa) ||
+			(v == 'flac' && !can_flac))
+			toast.warn(15, L.mt_c2ng);
+
+		if (v == 'owa' && IPHONE)
+			toast.err(30, L.mt_xowa);
+
+		for (var a = 0; a < fmts.length; a++) {
+			var btn = ebi('ac2' + fmts[a]);
+			if (!btn)
+				return console.log('!btn', fmts[a]);
+			btn.onclick = r.set_ac2;
+			btns.push(btn);
+		}
+		if (!IPHONE)
+			btns[1].style.display = btns[2].style.display = 'none';
+		btns[4].style.display = have_c2flac ? '' : 'none';
+		btns[5].style.display = have_c2wav ? '' : 'none';
+
+		if (v)
+			swrite('acode2', v);
+		else
+			v = dv;
+
+		v = sread('acode2', fmts) || v;
+		for (var a = 0; a < fmts.length; a++)
+			clmod(btns[a], 'on', fmts[a] == v)
+
+		r.ac2 = v;
+		ebi('ac_flac').setAttribute('tt', L.mt_cflac.split('"')[0].format(v));
+		ebi('ac_aac').setAttribute('tt', L.mt_caac.split('"')[0].format(v));
+		ebi('ac_oth').setAttribute('tt', L.mt_coth.split('"')[0].format(v));
 	};
 
 	r.pp = function () {
 		var adur, apos, playing = mp.au && !mp.au.paused;
+
+		clearTimeout(mpl.t_eplay);
 
 		clmod(ebi('np_inf'), 'playing', playing);
 
@@ -1532,10 +1946,8 @@ var mpl = (function () {
 				}
 			}
 
-			if (cover) {
-				cover += (cover.indexOf('?') === -1 ? '?' : '&') + 'th=j';
-				tags.artwork = [{ "src": cover, type: "image/jpeg" }];
-			}
+			cover = addq(cover || mp.au.osrc, 'th=j');
+			tags.artwork = [{ "src": cover, type: "image/jpeg" }];
 		}
 
 		ebi('np_circle').textContent = np.circle || '';
@@ -1544,9 +1956,11 @@ var mpl = (function () {
 		ebi('np_artist').textContent = np.artist || (fns.length > 1 ? fns[0] : '');
 		ebi('np_title').textContent = np.title || '';
 		ebi('np_dur').textContent = np['.dur'] || '';
-		ebi('np_url').textContent = get_vpath() + np.file.split('?')[0];
-		if (!MOBILE)
-			ebi('np_img').setAttribute('src', cover || '');
+		ebi('np_url').textContent = uricom_dec(get_evpath()) + np.file.split('?')[0];
+		if (!MOBILE && cover)
+			ebi('np_img').setAttribute('src', cover);
+		else
+			ebi('np_img').removeAttribute('src');
 
 		navigator.mediaSession.metadata = new MediaMetadata(tags);
 		navigator.mediaSession.setActionHandler('play', mplay);
@@ -1577,6 +1991,7 @@ var mpl = (function () {
 	r.unbuffer = function (url) {
 		if (mp.au2 && (!url || mp.au2.rsrc == url)) {
 			mp.au2.src = mp.au2.rsrc = '';
+			mp.au2.ld = 0; //owa
 			mp.au2.load();
 		}
 		if (!url)
@@ -1587,30 +2002,42 @@ var mpl = (function () {
 })();
 
 
-var can_ogg = true;
+var za,
+	can_ogg = true,
+	can_owa = false,
+	can_flac = false,
+	can_caf = APPLE && !/ OS ([1-9]|1[01])_/.test(UA);
 try {
-	can_ogg = new Audio().canPlayType('audio/ogg; codecs=opus') === 'probably';
-
-	if (document.documentMode)
-		can_ogg = true;  // ie8-11
+	za = new Audio();
+	can_ogg = za.canPlayType('audio/ogg; codecs=opus') === 'probably';
+	can_owa = za.canPlayType('audio/webm; codecs=opus') === 'probably';
+	can_flac = za.canPlayType('audio/flac') === 'probably';
+	can_caf = za.canPlayType('audio/x-caf') && can_caf; //'maybe'
 }
 catch (ex) { }
+za = null;
+
+if (can_owa && APPLE && / OS ([1-9]|1[0-7])_/.test(UA))
+	can_owa = false;
+
+mpl.init_ac2();
 
 
-var re_au_native = can_ogg ? /\.(aac|flac|m4a|mp3|ogg|opus|wav)$/i :
-	have_acode ? /\.(aac|flac|m4a|mp3|opus|wav)$/i : /\.(aac|flac|m4a|mp3|wav)$/i,
-	re_au_all = /\.(aac|ac3|aif|aiff|alac|alaw|amr|ape|au|dfpwm|dts|flac|gsm|it|m4a|mo3|mod|mp2|mp3|mpc|mptm|mt2|mulaw|ogg|okt|opus|ra|s3m|tak|tta|ulaw|wav|wma|wv|xm|xpk)$/i;
+var re_m3u = /\.(m3u8?)$/i;
+var re_au_native = (can_ogg || have_acode) ? /\.(aac|flac|m4a|mp3|oga|ogg|opus|wav)$/i : /\.(aac|flac|m4a|mp3|wav)$/i,
+	re_au_vid = /\.(3gp|asf|avi|flv|m4v|mkv|mov|mp4|mpeg|mpeg2|mpegts|mpg|mpg2|nut|ogm|ogv|rm|ts|vob|webm|wmv)$/i,
+	re_au_all = /\.(aac|ac3|aif|aiff|alac|alaw|amr|ape|au|dfpwm|dts|flac|gsm|it|itgz|itxz|itz|m4a|mdgz|mdxz|mdz|mo3|mod|mp2|mp3|mpc|mptm|mt2|mulaw|oga|ogg|okt|opus|ra|s3m|s3gz|s3xz|s3z|tak|tta|ulaw|wav|wma|wv|xm|xmgz|xmxz|xmz|xpk|3gp|asf|avi|flv|m4v|mkv|mov|mp4|mpeg|mpeg2|mpegts|mpg|mpg2|nut|ogm|ogv|rm|ts|vob|webm|wmv)$/i;
 
 
 // extract songs + add play column
-var mpo = { "au": null, "au2": null, "acs": null };
-var t_fchg = 0;
+var mpo = { "au": null, "au2": null, "acs": null, "fau": null };
 function MPlayer() {
 	var r = this;
 	r.id = Date.now();
 	r.au = mpo.au;
 	r.au2 = mpo.au2;
 	r.acs = mpo.acs;
+	r.fau = mpo.fau;
 	r.tracks = {};
 	r.order = [];
 	r.cd_pause = 0;
@@ -1623,20 +2050,26 @@ function MPlayer() {
 			link = tds[1].getElementsByTagName('a');
 
 		link = link[link.length - 1];
-		var url = noq_href(link),
-			m = re_audio.exec(url);
+		var url = link.getAttribute('href'),
+			fn = url.split('?')[0];
 
-		if (m) {
-			var tid = link.getAttribute('id');
+		if (re_audio.exec(fn)) {
+			var tid = link.getAttribute('id'),
+				txt = re_au_vid.exec(fn) ? '(🎧)' : L.mb_play;
 			r.order.push(tid);
 			r.tracks[tid] = url;
-			tds[0].innerHTML = '<a id="a' + tid + '" href="#a' + tid + '" class="play">' + L.mb_play + '</a></td>';
+			tds[0].innerHTML = '<a id="a' + tid + '" href="#a' + tid + '" class="play">' + txt + '</a></td>';
 			ebi('a' + tid).onclick = ev_play;
 			clmod(trs[a], 'au', 1);
 		}
+		else if (re_m3u.exec(fn)) {
+			var tid = link.getAttribute('id');
+			tds[0].innerHTML = '<a id="a' + tid + '" href="#a' + tid + '" class="play">' + L.mb_play + '</a></td>';
+			ebi('a' + tid).onclick = ev_load_m3u;
+		}
 	}
 
-	r.vol = clamp(fcfg_get('vol', IPHONE ? 1 : 0.5), 0, 1);
+	r.vol = clamp(fcfg_get('vol', IPHONE ? 1 : dvol / 100), 0, 1);
 
 	r.expvol = function (v) {
 		return 0.5 * v + 0.5 * v * v;
@@ -1651,6 +2084,20 @@ function MPlayer() {
 			r.au.volume = r.expvol(r.vol);
 	};
 
+	r.shuffle = function () {
+		if (!mpl.shuf)
+			return;
+
+		// durstenfeld
+		for (var a = r.order.length - 1; a > 0; a--) {
+			var b = Math.floor(Math.random() * (a + 1)),
+				c = r.order[a];
+			r.order[a] = r.order[b];
+			r.order[b] = c;
+		}
+	};
+	r.shuffle();
+
 	r.read_order = function () {
 		var order = [],
 			links = QSA('#files>tbody>tr>td:nth-child(1)>a');
@@ -1663,6 +2110,7 @@ function MPlayer() {
 			order.push(tid.slice(1));
 		}
 		r.order = order;
+		r.shuffle();
 	};
 
 	r.fdir = 0;
@@ -1718,13 +2166,14 @@ function MPlayer() {
 	}
 
 	r.preload = function (url, full) {
-		url = mpl.acode(url);
-		url += (url.indexOf('?') < 0 ? '?' : '&') + 'cache=987';
+		var t0 = Date.now(),
+			fname = uricom_dec(url.split('/').pop().split('?')[0]);
+
+		url = addq(mpl.acode(url), 'cache=987&_=' + ACB);
 		mpl.preload_url = full ? url : null;
-		var t0 = Date.now();
 
 		if (mpl.waves)
-			fetch(url.replace(/\bth=opus&/, '') + '&th=p').then(function (x) {
+			fetch(url.replace(/\bth=(opus|mp3)&/, '') + '&th=p').then(function (x) {
 				x.body.getReader().read();
 			});
 
@@ -1752,30 +2201,63 @@ function MPlayer() {
 			});
 
 		r.nopause();
-		r.au2.onloadeddata = r.au2.onloadedmetadata = r.nopause;
+		r.au2.ld = 0; //owa
+		r.au2.onloadeddata = r.au2.onloadedmetadata = r.onpreload;
 		r.au2.preload = "auto";
 		r.au2.src = r.au2.rsrc = url;
+
+		if (mpl.prescan_evp) {
+			mpl.prescan_evp = null;
+			toast.ok(7, L.mm_scank + "\n" + esc(fname));
+		}
+		console.log("preloading " + fname);
 	};
 
 	r.nopause = function () {
 		r.cd_pause = Date.now();
 	};
+
+	r.onpreload = function () {
+		r.nopause();
+		this.ld++;
+	};
+
+	r.init_fau = function () {
+		if (r.fau || !mpl.fau)
+			return;
+
+		// breaks touchbar-macs
+		console.log('init fau');
+		r.fau = new Audio(SR + '/.cpr/deps/busy.mp3?_=' + TS);
+		r.fau.loop = true;
+		r.fau.play();
+	};
+
+	r.set_ev = function () {
+		mp.au.onended = evau_end;
+		mp.au.onerror = evau_error;
+		mp.au.onprogress = pbar.drawpos;
+		mp.au.onplaying = mpui.progress_updater;
+		mp.au.onloadeddata = mp.au.onloadedmetadata = mp.nopause;
+	};
 }
 
 
-function ft2dict(tr) {
+function ft2dict(tr, skip) {
 	var th = ebi('files').tHead.rows[0].cells,
 		rv = [],
 		rh = [],
 		ra = [],
 		rt = {};
 
+	skip = skip || {};
+
 	for (var a = 1, aa = th.length; a < aa; a++) {
 		var tv = tr.cells[a].textContent,
 			tk = a == 1 ? 'file' : th[a].getAttribute('name').split('/').pop().toLowerCase(),
 			vis = th[a].className.indexOf('min') === -1;
 
-		if (!tv)
+		if (!tv || skip[tk])
 			continue;
 
 		(vis ? rv : rh).push(tk);
@@ -1788,7 +2270,7 @@ function ft2dict(tr) {
 
 function get_np() {
 	var tr = QS('#files tr.play');
-	return ft2dict(tr);
+	return ft2dict(tr, { 'up_ip': 1 });
 };
 
 
@@ -1799,6 +2281,8 @@ var widget = (function () {
 		wtico = ebi('wtico'),
 		nptxt = ebi('nptxt'),
 		npirc = ebi('npirc'),
+		m3ua = ebi('m3ua'),
+		m3uc = ebi('m3uc'),
 		touchmode = false,
 		was_paused = true;
 
@@ -1832,6 +2316,9 @@ var widget = (function () {
 			ebi('bplay').innerHTML = paused ? '▶' : '⏸';
 		}
 	};
+	r.setvis = function () {
+		widget.style.display = !has(perms, "read") || showfile.abrt ? 'none' : '';
+	};
 	wtico.onclick = function (e) {
 		if (!touchmode)
 			r.toggle(e);
@@ -1849,12 +2336,55 @@ var widget = (function () {
 			np = npr[0];
 
 		for (var a = 0; a < npk.length; a++)
-			m += (npk[a] == 'file' ? '' : npk[a]) + '(' + cv + np[npk[a]] + ck + ') // ';
+			m += (npk[a] == 'file' ? '' : npk[a]).replace(/^\./, '') + '(' + cv + np[npk[a]] + ck + ') // ';
 
 		m += '[' + cv + s2ms(mp.au.currentTime) + ck + '/' + cv + s2ms(mp.au.duration) + ck + ']';
 
 		cliptxt(m, function () {
-			toast.ok(1, 'copied to clipboard', null, 'top');
+			toast.ok(1, L.clipped, null, 'top');
+		});
+	};
+	m3ua.onclick = function (e) {
+		ev(e);
+		var el,
+			files = [],
+			sel = msel.getsel();
+
+		for (var a = 0; a < sel.length; a++) {
+			el = ebi(sel[a].id).closest('tr');
+			if (clgot(el, 'au'))
+				files.push(el);
+		}
+		el = QS('#files tr.play');
+		if (!sel.length && el)
+			files.push(el);
+
+		for (var a = 0; a < files.length; a++) {
+			var md = ft2dict(files[a])[0],
+				dur = md['.dur'] || '1',
+				tag = '';
+
+			if (md.artist && md.title)
+				tag = md.artist + ' - ' + md.title;
+			else if (md.artist)
+				tag = md.artist + ' - ' + md.file;
+			else if (md.title)
+				tag = md.title;
+
+			if (dur.indexOf(':') > 0) {
+				dur = dur.split(':');
+				dur = 60 * parseInt(dur[0]) + parseInt(dur[1]);
+			}
+			else dur = parseInt(dur);
+
+			mpl.m3ut += '#EXTINF:' + dur + ',' + tag + '\n' + uricom_dec(get_evpath()) + md.file + '\n';
+		}
+		toast.ok(2, files.length == 1 ? L.m3u_add1 : L.m3u_addn.format(files.length), null, 'top');
+	};
+	m3uc.onclick = function (e) {
+		ev(e);
+		cliptxt(mpl.m3ut, function () {
+			toast.ok(15, L.m3u_clip, null, 'top');
 		});
 	};
 	r.set(sread('au_open') == 1);
@@ -1911,8 +2441,8 @@ var pbar = (function () {
 		r.buf = canvas_cfg(ebi('barbuf'));
 		r.pos = canvas_cfg(ebi('barpos'));
 		r.buf.ctx.font = '.5em sans-serif';
-		r.pos.ctx.font = '1em sans-serif';
-		r.pos.ctx.strokeStyle = 'rgba(24,56,0,0.4)';
+		r.pos.ctx.font = '.9em sans-serif';
+		r.pos.ctx.strokeStyle = 'rgba(24,56,0,0.5)';
 		r.drawbuf();
 		r.drawpos();
 		if (!r.pos.can.onmouseleave)
@@ -2040,8 +2570,21 @@ var pbar = (function () {
 		}
 		pctx.clearRect(0, 0, pc.w, pc.h);
 
-		if (!mp || !mp.au || !isNum(adur = mp.au.duration) || !isNum(apos = mp.au.currentTime) || apos < 0 || adur < apos)
+		if (!mp || !mp.au)
+			return;  // not-init
+
+		if (!isNum(adur = mp.au.duration) || !isNum(apos = mp.au.currentTime) || apos < 0 || adur < apos) {
+			if (Date.now() - mp.au.pt0 < 500)
+				return;
+
+			pctx.fillStyle = light ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)';
+			var m = /[?&]th=(opus|owa|caf|mp3)/.exec('' + mp.au.rsrc),
+				txt = mp.au.ded ? L.mm_playerr.replace(':', ' ;_;') :
+					m ? L.mm_bconv.format(m[1]) : L.mm_bload;
+
+			pctx.fillText(txt, 16, pc.h / 1.5);
 			return;  // not-init || unsupp-codec
+		}
 
 		if (bau != mp.au)
 			r.drawbuf();
@@ -2078,7 +2621,7 @@ var pbar = (function () {
 		var m1 = pctx.measureText(t1),
 			m1b = pctx.measureText(t1 + ":88"),
 			m2 = pctx.measureText(t2),
-			yt = pc.h / 3 * 2.1,
+			yt = pc.h * 0.94,
 			xt1 = pc.w - (m1.width + 12),
 			xt2 = x < m1.width * 1.4 ? (x + 12) : (Math.min(pc.w - m1b.width, x - 12) - m2.width);
 
@@ -2114,6 +2657,7 @@ var vbar = (function () {
 		can = r.can.can;
 		ctx = r.can.ctx;
 		ctx.font = '.7em sans-serif';
+		ctx.fontVariantCaps = 'small-caps';
 		w = r.can.w;
 		h = r.can.h;
 		r.draw();
@@ -2139,18 +2683,18 @@ var vbar = (function () {
 		ctx.fillStyle = grad2; ctx.fillRect(0, 0, w, h);
 		ctx.fillStyle = grad1; ctx.fillRect(0, 0, w * mp.vol, h);
 
-		if (Date.now() - lastv > 1000)
-			return;
+		var vt = 'volume ' + Math.floor(mp.vol * 100),
+			tw = ctx.measureText(vt).width,
+			x = w * mp.vol - tw - 8,
+			li = dy;
 
-		var vt = Math.floor(mp.vol * 100),
-			tw = ctx.measureText(vt).width;
-
-		var li = dy;
-		if (mp.vol < 0.05)
+		if (mp.vol < 0.5) {
+			x += tw + 16;
 			li = !li;
+		}
 
 		ctx.fillStyle = li ? '#fff' : '#210';
-		ctx.fillText(vt, Math.max(4, w * mp.vol - tw - 8), h / 3 * 2);
+		ctx.fillText(vt, x, h / 3 * 2);
 
 		clearTimeout(untext);
 		untext = setTimeout(r.draw, 1000);
@@ -2234,7 +2778,7 @@ function seek_au_sec(seek) {
 
 
 function song_skip(n, dirskip) {
-	var tid = mp.au ? mp.au.tid : null,
+	var tid = mp.au && mp.au.evp == get_evpath() ? mp.au.tid : null,
 		ofs = tid ? mp.order.indexOf(tid) : -1;
 
 	if (dirskip && ofs + 1 && ofs > mp.order.length - 2) {
@@ -2249,33 +2793,24 @@ function song_skip(n, dirskip) {
 	else
 		play(mp.order[n == -1 ? mp.order.length - 1 : 0]);
 }
-function next_song_sig(e) {
-	t_fchg = document.hasFocus() ? 0 : Date.now();
-	return next_song_cmn(e);
-}
 function next_song(e) {
-	t_fchg = 0;
-	return next_song_cmn(e);
-}
-function next_song_cmn(e) {
 	ev(e);
+	if (QS('.dumb_loader_thing')) {
+		treectl.ls_cb = next_song;
+		return;
+	}
 	if (mp.order.length) {
 		var dirskip = mpl.traversals;
 		mpl.traversals = 0;
 		return song_skip(1, dirskip);
 	}
 	if (mpl.traversals++ < 5) {
-		if (MOBILE && t_fchg && Date.now() - t_fchg > 30 * 1000)
-			modal.alert(IPHONE ? L.mm_iosblk : L.mm_pwrsv);
-
-		t_fchg = document.hasFocus() ? 0 : Date.now();
-		treectl.ls_cb = next_song_cmn;
+		treectl.ls_cb = next_song;
 		return tree_neigh(1);
 	}
 	toast.inf(10, L.mm_nof);
 	console.log("mm_nof2");
 	mpl.traversals = 0;
-	t_fchg = 0;
 }
 function last_song(e) {
 	ev(e);
@@ -2290,7 +2825,6 @@ function last_song(e) {
 	toast.inf(10, L.mm_nof);
 	console.log("mm_nof2");
 	mpl.traversals = 0;
-	t_fchg = 0;
 }
 function prev_song(e) {
 	ev(e);
@@ -2298,6 +2832,10 @@ function prev_song(e) {
 	if (mp.au && !mp.au.paused && mp.au.currentTime > 3)
 		return seek_au_sec(0);
 
+	if (QS('.dumb_loader_thing')) {
+		treectl.ls_cb = function () { song_skip(-1); };
+		return;
+	}
 	return song_skip(-1);
 }
 function dl_song() {
@@ -2309,9 +2847,16 @@ function dl_song() {
 		return toast.inf(10, L.f_dls);
 	}
 
-	var url = mp.tracks[mp.au.tid];
-	url += (url.indexOf('?') < 0 ? '?' : '&') + 'cache=987';
+	var url = addq(mp.au.osrc, 'cache=987&_=' + ACB);
 	dl_file(url);
+}
+function sel_song() {
+	var o = QS('#files tr.play');
+	if (!o)
+		return;
+	clmod(o, 'sel', 't');
+	msel.origin_tr(o);
+	msel.selui();
 }
 
 
@@ -2372,7 +2917,7 @@ function mpause(e) {
 		seek_au_mul(x * 1.0 / rect.width);
 	};
 
-	if (!TOUCH)
+	if (!TOUCH) {
 		bar.onwheel = function (e) {
 			var dist = Math.sign(e.deltaY) * 10;
 			if (Math.abs(e.deltaY) < 30 && !e.deltaMode)
@@ -2384,6 +2929,20 @@ function mpause(e) {
 			seek_au_rel(dist);
 			ev(e);
 		};
+		ebi('pvol').onwheel = function (e) {
+			var dist = Math.sign(e.deltaY) * 10;
+			if (Math.abs(e.deltaY) < 30 && !e.deltaMode)
+				dist = e.deltaY;
+
+			if (!dist || !mp.au)
+				return true;
+
+			dist *= -1;
+			mp.setvol(mp.vol + dist / 500);
+			vbar.draw();
+			ev(e);
+		};
+	}
 })();
 
 
@@ -2398,6 +2957,10 @@ var mpui = (function () {
 		//console.trace();
 		timer.add(updater_impl, true);
 	};
+
+	function repreload() {
+		preloaded = fpreloaded = null;
+	}
 
 	function updater_impl() {
 		if (!mp.au) {
@@ -2434,33 +2997,54 @@ var mpui = (function () {
 				pbar.drawbuf();
 		}
 
-		if (pos > 0.3 && t_fchg) {
-			// cannot check document.hasFocus to avoid false positives;
-			// it continues on power-on, doesn't need to be in-browser
-			if (MOBILE && Date.now() - t_fchg > 30 * 1000)
-				modal.alert(IPHONE ? L.mm_iosblk : L.mm_pwrsv);
-
-			t_fchg = 0;
-		}
-
 		// preload next song
-		if (mpl.preload && preloaded != mp.au.rsrc) {
+		if (!mpl.one && mpl.preload && preloaded != mp.au.rsrc) {
 			var len = mp.au.duration,
 				rem = pos > 1 ? len - pos : 999,
 				full = null;
 
-			if (rem < (mpl.fullpre ? 7 : 20)) {
+			if (rem < 7 || (!mpl.fullpre && (rem < 40 || (rem < 90 && pos > 10)))) {
 				preloaded = fpreloaded = mp.au.rsrc;
 				full = false;
 			}
-			else if (rem < 40 && mpl.fullpre && fpreloaded != mp.au.rsrc) {
+			else if (rem < 60 && mpl.fullpre && fpreloaded != mp.au.rsrc) {
 				fpreloaded = mp.au.rsrc;
 				full = true;
 			}
 
 			if (full !== null)
 				try {
-					mp.preload(mp.tracks[mp.order[mp.order.indexOf(mp.au.tid) + 1]], full);
+					var oi = mp.order.indexOf(mp.au.tid) + 1,
+						evp = get_evpath();
+
+					if (oi >= mp.order.length && (
+							mpl.one ||
+							mpl.pb_mode != 'next' ||
+							mp.au.evp != evp ||
+							ebi('unsearch'))
+						)
+						oi = 0;
+
+					if (oi >= mp.order.length) {
+						if (!mpl.prescan)
+							throw "prescan disabled";
+
+						if (mpl.prescan_evp == evp)
+							throw "evp match";
+
+						if (mpl.traversals++ > 4) {
+							mpl.prescan_evp = null;
+							toast.inf(10, L.mm_nof);
+							throw L.mm_nof;
+						}
+
+						mpl.prescan_evp = evp;
+						toast.inf(10, L.mm_prescan);
+						treectl.ls_cb = repreload;
+						tree_neigh(1);
+					}
+					else
+						mp.preload(mp.tracks[mp.order[oi]], full);
 				}
 				catch (ex) {
 					console.log("preload failed", ex);
@@ -2630,7 +3214,7 @@ var afilt = (function () {
 		mp.acs = mpo.acs = null;
 	};
 
-	r.apply = function (v) {
+	r.apply = function (v, au) {
 		r.init();
 		r.draw();
 
@@ -2650,12 +3234,13 @@ var afilt = (function () {
 			if (r.plugs[a].en)
 				plug = true;
 
-		if (!actx || !mp.au || (!r.eqen && !plug && !mp.acs))
+		au = au || (mp && mp.au);
+		if (!actx || !au || (!r.eqen && !plug && !mp.acs))
 			return;
 
 		r.stop();
-		mp.au.id = mp.au.id || Date.now();
-		mp.acs = r.acst[mp.au.id] = r.acst[mp.au.id] || actx.createMediaElementSource(mp.au);
+		au.id = au.id || Date.now();
+		mp.acs = r.acst[au.id] = r.acst[au.id] || actx.createMediaElementSource(au);
 
 		if (r.eqen)
 			add_eq();
@@ -2841,7 +3426,7 @@ var afilt = (function () {
 	}
 
 	var html = ['<table><tr><td rowspan="4">',
-		'<a id="au_eq" class="tgl btn" href="#" tt="' + L.mt_eq + '">enable</a></td>'],
+		'<a id="au_eq" class="tgl btn" href="#" tt="' + L.mt_eq + '">' + L.enable + '</a></td>'],
 		h2 = [], h3 = [], h4 = [];
 
 	var vs = [];
@@ -2871,7 +3456,7 @@ var afilt = (function () {
 
 	h2 = [];
 	html = ['<table><tr><td rowspan="2">',
-		'<a id="au_drc" class="tgl btn" href="#" tt="' + L.mt_drc + '">enable</a></td>'];
+		'<a id="au_drc" class="tgl btn" href="#" tt="' + L.mt_drc + '">' + L.enable + '</a></td>'];
 
 	for (var a = 0; a < r.drch.length; a++) {
 		html.push('<td>' + r.drch[a] + '</td>');
@@ -2904,6 +3489,7 @@ var afilt = (function () {
 
 // plays the tid'th audio file on the page
 function play(tid, is_ev, seek) {
+	clearTimeout(mpl.t_eplay);
 	if (mp.order.length == 0)
 		return console.log('no audio found wait what');
 
@@ -2911,6 +3497,7 @@ function play(tid, is_ev, seek) {
 		return;
 
 	mpl.preload_url = null;
+	mp.nopause();
 	mp.stopfade(true);
 
 	var tn = tid;
@@ -2921,11 +3508,13 @@ function play(tid, is_ev, seek) {
 	}
 
 	if (tn >= mp.order.length) {
+		if (mpl.pb_mode == 'stop')
+			return;
+
 		if (mpl.pb_mode == 'loop' || ebi('unsearch')) {
 			tn = 0;
 		}
 		else if (mpl.pb_mode == 'next') {
-			t_fchg = document.hasFocus() ? 0 : Date.now();
 			treectl.ls_cb = next_song;
 			return tree_neigh(1);
 		}
@@ -2952,15 +3541,12 @@ function play(tid, is_ev, seek) {
 	else {
 		mp.au = new Audio();
 		mp.au2 = new Audio();
-		mp.au.onerror = evau_error;
-		mp.au.onprogress = pbar.drawpos;
-		mp.au.onplaying = mpui.progress_updater;
-		mp.au.onended = next_song_sig;
+		mp.set_ev();
 		widget.open();
 	}
+	mp.init_fau();
 
-	var url = mpl.acode(mp.tracks[tid]);
-	url += (url.indexOf('?') < 0 ? '?' : '&') + 'cache=987';
+	var url = addq(mpl.acode(mp.tracks[tid]), 'cache=987&_=' + ACB);
 
 	if (mp.au.rsrc == url)
 		mp.au.currentTime = 0;
@@ -2968,25 +3554,29 @@ function play(tid, is_ev, seek) {
 		var t = mp.au;
 		mp.au = mp.au2;
 		mp.au2 = t;
-		t.onerror = t.onprogress = t.onended = null;
-		mp.au.onerror = evau_error;
-		mp.au.onprogress = pbar.drawpos;
-		mp.au.onplaying = mpui.progress_updater;
-		mp.au.onended = next_song_sig;
+		t.onerror = t.onprogress = t.onended = t.loop = null;
+		t.ld = 0; //owa
+		mp.set_ev();
 		t = mp.au.currentTime;
 		if (isNum(t) && t > 0.1)
 			mp.au.currentTime = 0;
 	}
-	else
+	else {
+		console.log('get ' + url.split('/').pop());
 		mp.au.src = mp.au.rsrc = url;
+	}
 
+	mp.au.osrc = mp.tracks[tid];
 	afilt.apply();
 
 	setTimeout(function () {
 		mpl.unbuffer(url);
 	}, 500);
 
+	mp.au.ded = 0;
 	mp.au.tid = tid;
+	mp.au.pt0 = Date.now();
+	mp.au.evp = get_evpath();
 	mp.au.volume = mp.expvol(mp.vol);
 	var trs = QSA('#files tr.play');
 	for (var a = 0, aa = trs.length; a < aa; a++)
@@ -2996,6 +3586,7 @@ function play(tid, is_ev, seek) {
 	clmod(ebi(oid), 'act', 1);
 	clmod(ebi(oid).closest('tr'), 'play', 1);
 	clmod(ebi('wtoggle'), 'np', mpl.clip);
+	clmod(ebi('wtoggle'), 'm3u', mpl.m3uen);
 	if (thegrid)
 		thegrid.loadsel();
 
@@ -3004,7 +3595,10 @@ function play(tid, is_ev, seek) {
 
 	try {
 		mp.nopause();
-		mp.au.play();
+		mp.au.loop = mpl.loop && !mpl.one;
+		if (mpl.aplay || is_ev !== -1)
+			mp.au.play();
+
 		if (mp.au.paused)
 			autoplay_blocked(seek);
 		else if (seek) {
@@ -3014,13 +3608,14 @@ function play(tid, is_ev, seek) {
 		if (!seek && !ebi('unsearch')) {
 			var o = ebi(oid);
 			o.setAttribute('id', 'thx_js');
-			sethash(oid);
+			if (mpl.aplay)
+				sethash(oid + getsort());
 			o.setAttribute('id', oid);
 		}
 
 		pbar.unwave();
 		if (mpl.waves)
-			pbar.loadwaves(url.replace(/\bth=opus&/, '') + '&th=p');
+			pbar.loadwaves(url.replace(/\bth=(opus|mp3)&/, '') + '&th=p');
 
 		mpui.progress_updater();
 		pbar.onresize();
@@ -3032,7 +3627,7 @@ function play(tid, is_ev, seek) {
 		toast.err(0, esc(L.mm_playerr + basenames(ex)));
 	}
 	clmod(ebi(oid), 'act');
-	setTimeout(next_song_sig, 5000);
+	mpl.t_eplay = setTimeout(next_song, 5000);
 }
 
 
@@ -3045,16 +3640,37 @@ function scroll2playing() {
 }
 
 
+function evau_end(e) {
+	if (mpl.one)
+		return;
+	if (!mpl.loop)
+		return next_song(e);
+	ev(e);
+	mp.au.currentTime = 0;
+	mp.au.play();
+}
+
+
 // event from the audio object if something breaks
 function evau_error(e) {
 	var err = '',
 		eplaya = (e && e.target) || (window.event && window.event.srcElement);
+
+	eplaya.ded = 1;
 
 	switch (eplaya.error.code) {
 		case eplaya.error.MEDIA_ERR_ABORTED:
 			err = L.mm_eabrt;
 			break;
 		case eplaya.error.MEDIA_ERR_NETWORK:
+			if (IPHONE && eplaya.ld === 1 && mpl.ac2 == 'owa' && !eplaya.paused && !eplaya.currentTime) {
+				eplaya.ded = 0;
+				if (!mpl.owaw) {
+					mpl.owaw = 1;
+					console.log('ignored iOS bug; spurious error sent in parallel with preloaded songs starting to play just fine');
+				}
+				return;
+			}
 			err = L.mm_enet;
 			break;
 		case eplaya.error.MEDIA_ERR_DECODE:
@@ -3078,6 +3694,7 @@ function evau_error(e) {
 	}
 	var em = '' + eplaya.error.message,
 		mfile = '\n\nFile: «' + uricom_dec(eplaya.src.split('/').pop()) + '»',
+		e500 = L.mm_e500,
 		e404 = L.mm_e404,
 		e403 = L.mm_e403;
 
@@ -3090,6 +3707,9 @@ function evau_error(e) {
 	if (em.startsWith('404: '))
 		err = e404;
 
+	if (em.startsWith('500: '))
+		err = e500;
+
 	toast.warn(15, esc(basenames(err + mfile)));
 	console.log(basenames(err + mfile));
 
@@ -3101,13 +3721,18 @@ function evau_error(e) {
 			if (this.status < 400)
 				return;
 
-			err = this.status == 403 ? e403 : this.status == 404 ? e404 :
+			err = this.status == 403 ? e403 :
+				this.status == 404 ? e404 :
+				this.status == 500 ? e500 :
 				L.mm_e5xx + this.status;
 
 			toast.warn(15, esc(basenames(err + mfile)));
 		};
 		xhr.send();
+		return;
 	}
+
+	mpl.t_eplay = setTimeout(next_song, 15000);
 }
 
 
@@ -3116,7 +3741,7 @@ function autoplay_blocked(seek) {
 	var tid = mp.au.tid,
 		fn = mp.tracks[tid].split(/\//).pop();
 
-	fn = uricom_dec(fn.replace(/\+/g, ' '));
+	fn = uricom_dec(fn.replace(/\+/g, ' ').split('?')[0]);
 
 	modal.confirm('<h6>' + L.mm_hashplay + '</h6>\n«' + esc(fn) + '»', function () {
 		// chrome 91 may permanently taint on a failed play()
@@ -3161,7 +3786,27 @@ function scan_hash(v) {
 
 
 function eval_hash() {
-	window.onpopstate = treectl.onpopfun;
+	if (!window.hotkeys_attached) {
+		window.hotkeys_attached = true;
+		document.onkeydown = ahotkeys;
+		window.onpopstate = treectl.onpopfun;
+	}
+
+	if (hash0 && window.og_fn) {
+		var all = msel.getall(), mi;
+		for (var a = 0; a < all.length; a++)
+			if (og_fn == uricom_dec(vsplit(all[a].vp)[1].split('?')[0])) {
+				mi = all[a];
+				break;
+			}
+
+		var ch = !mi ? '' :
+			img_re.exec(og_fn) ? 'g' :
+			ebi('a' + mi.id) ? 'a' :
+			'';
+
+		hash0 = ch ? ('#' + ch + mi.id) : '';
+	}
 
 	var v = hash0;
 	hash0 = null;
@@ -3176,9 +3821,9 @@ function eval_hash() {
 
 		if (mtype == 'a') {
 			if (!ts)
-				return play(id);
+				return play(id, -1);
 
-			return play(id, false, ts);
+			return play(id, -1, ts);
 		}
 
 		if (mtype == 'g') {
@@ -3195,21 +3840,32 @@ function eval_hash() {
 				if (!im)
 					return toast.warn(10, L.im_hnf);
 
+				if (thegrid.sel)
+					setTimeout(function () {
+						thegrid.sel = true;
+					}, 1);
+
+				thegrid.sel = false;
 				im.click();
 				im.scrollIntoView();
 			}, 50);
 		}
 	}
 
-	if (v.indexOf('#q=') === 0) {
+	if (v.startsWith('#q=')) {
 		goto('search');
 		var i = ebi('q_raw');
 		i.value = uricom_dec(v.slice(3));
 		return i.onkeydown({ 'key': 'Enter' });
 	}
 
-	if (v.indexOf('#v=') === 0) {
+	if (v.startsWith('#v=')) {
 		goto(v.slice(3));
+		return;
+	}
+
+	if (v.startsWith("#m3u=")) {
+		load_m3u(v.slice(5));
 		return;
 	}
 }
@@ -3229,9 +3885,11 @@ function eval_hash() {
 			d.onclick = function (e) {
 				ev(e);
 				if (a)
-					QS(treectl.hidden ? '#path a:nth-last-child(2)' : '#treeul a.hl').focus();
+					d = QS(treectl.hidden ? '#path a:nth-last-child(2)' : '#treeul a.hl');
 				else
-					QS(thegrid.en ? '#ggrid a' : '#files tbody tr[tabindex]').focus();
+					d = QS(thegrid.en ? '#ggrid a' : '#files tbody tr[tabindex]');
+				if (d)
+					d.focus();
 			};
 		})(a);
 
@@ -3261,10 +3919,18 @@ function eval_hash() {
 	}
 	bcfg_bind(props, 'mcmp', 'au_compact', false, setacmp);
 	setacmp();
+
+	// toggle bup checksums
+	ebi('uput').onchange = function() {
+		QS('#op_bup input[name="act"]').value = this.checked ? 'uput' : 'bput';
+	};
 })();
 
 
 function read_dsort(txt) {
+	dnsort = dnsort ? 1 : 0;
+	ENATSORT = NATSORT && (sread('nsort') || dnsort) == 1;
+	clmod(ebi('nsort'), 'on', ENATSORT);
 	try {
 		var zt = (('' + txt).trim() || 'href').split(/,+/g);
 		dsort = [];
@@ -3281,19 +3947,34 @@ function read_dsort(txt) {
 		}
 	}
 	catch (ex) {
-		toast.warn(10, 'failed to apply default sort order [' + txt + ']:\n' + ex);
+		toast.warn(10, 'failed to apply default sort order [' + esc('' + txt) + ']:\n' + ex);
 		dsort = [['href', 1, '']];
 	}
 }
 read_dsort(dsort);
 
 
+function getsort() {
+	var ret = '',
+		sopts = jread('fsort');
+
+	sopts = sopts && sopts.length ? sopts : dsort;
+
+	for (var a = 0; a < Math.min(hsortn, sopts.length); a++)
+		ret += ',sort' + (sopts[a][1] < 0 ? '-' : '') + sopts[a][0];
+
+	return ret;
+}
+
+
 function sortfiles(nodes) {
 	if (!nodes.length)
 		return nodes;
 
-	var sopts = jread('fsort', jcp(dsort)),
+	var sopts = jread('fsort'),
 		dir1st = sread('dir1st') !== '0';
+
+	sopts = sopts && sopts.length ? sopts : jcp(dsort);
 
 	try {
 		var is_srch = false;
@@ -3309,6 +3990,8 @@ function sortfiles(nodes) {
 			var name = sopts[a][0], rev = sopts[a][1], typ = sopts[a][2];
 			if (!name)
 				continue;
+
+			name = name.toLowerCase();
 
 			if (name == 'ts')
 				typ = 'int';
@@ -3344,7 +4027,10 @@ function sortfiles(nodes) {
 				}
 				if (v2 === undefined) return 1 * rev;
 
-				var ret = rev * (typ == 'int' ? (v1 - v2) : (v1.localeCompare(v2)));
+				var ret = rev * (typ == 'int' ? (v1 - v2) :
+					ENATSORT ? NATSORT.compare(v1, v2) :
+					v1.localeCompare(v2));
+
 				if (ret === 0)
 					ret = onodes.indexOf(n1) - onodes.indexOf(n2);
 
@@ -3366,8 +4052,8 @@ function sortfiles(nodes) {
 	}
 	catch (ex) {
 		console.log("failed to apply sort config: " + ex);
-		console.log("resetting fsort " + sread('fsort'))
-		localStorage.removeItem('fsort');
+		console.log("resetting fsort " + sread('fsort'));
+		sdrop('fsort');
 	}
 	return nodes;
 }
@@ -3471,13 +4157,28 @@ function fmt_ren(re, md, fmt) {
 }
 
 
+function fs_abrt() {
+	toast.inf(30, L.fp_abrt);
+	fileman.sn++;
+	fileman.f.length = 0;
+	var xhr = new XHR();
+	xhr.open('POST', '/?fs_abrt=' + abrt_key, true);
+	xhr.send();
+}
+
+
 var fileman = (function () {
 	var bren = ebi('fren'),
 		bdel = ebi('fdel'),
 		bcut = ebi('fcut'),
+		bcpy = ebi('fcpy'),
 		bpst = ebi('fpst'),
+		bshr = ebi('fshr'),
+		t_paste,
 		r = {};
 
+	r.f = [];
+	r.sn = 1;
 	r.clip = null;
 	try {
 		r.bus = new BroadcastChannel("fileman_bus");
@@ -3485,22 +4186,44 @@ var fileman = (function () {
 	catch (ex) { }
 
 	r.render = function () {
-		if (r.clip === null)
+		if (r.clip === null) {
 			r.clip = jread('fman_clip', []).slice(1);
+			r.ccp = r.clip.length && r.clip[0] == '//c';
+			if (r.ccp)
+				r.clip.shift();
+		}
 
 		var sel = msel.getsel(),
-			nsel = sel.length;
+			nsel = sel.length,
+			enren = nsel,
+			endel = nsel,
+			encut = nsel,
+			encpy = nsel,
+			enpst = r.clip && r.clip.length,
+			hren = !(have_mv && has(perms, 'write') && has(perms, 'move')),
+			hdel = !(have_del && has(perms, 'delete')),
+			hcut = !(have_mv && has(perms, 'move')),
+			hpst = !(have_mv && has(perms, 'write')),
+			hshr = !can_shr || !get_evpath().indexOf(have_shr);
 
-		clmod(bren, 'en', nsel);
-		clmod(bdel, 'en', nsel);
-		clmod(bcut, 'en', nsel);
-		clmod(bpst, 'en', r.clip && r.clip.length);
+		if (!(enren || endel || encut || enpst))
+			hren = hdel = hcut = hpst = true;
 
-		clmod(bren, 'hide', !(have_mv && has(perms, 'write') && has(perms, 'move')));
-		clmod(bdel, 'hide', !(have_del && has(perms, 'delete')));
-		clmod(bcut, 'hide', !(have_mv && has(perms, 'move')));
-		clmod(bpst, 'hide', !(have_mv && has(perms, 'write')));
+		clmod(bren, 'en', enren);
+		clmod(bdel, 'en', endel);
+		clmod(bcut, 'en', encut);
+		clmod(bcpy, 'en', encpy);
+		clmod(bpst, 'en', enpst);
+		clmod(bshr, 'en', 1);
+
+		clmod(bren, 'hide', hren);
+		clmod(bdel, 'hide', hdel);
+		clmod(bcut, 'hide', hcut);
+		clmod(bpst, 'hide', hpst);
+		clmod(bshr, 'hide', hshr);
+
 		clmod(ebi('wfm'), 'act', QS('#wfm a.en:not(.hide)'));
+		clmod(ebi('wtoggle'), 'm3u', mpl.m3uen && (nsel || (mp && mp.au)));
 
 		var wfs = ebi('wfs'), h = '';
 		try {
@@ -3510,6 +4233,7 @@ var fileman = (function () {
 		clmod(wfs, 'act', h);
 
 		bpst.setAttribute('tt', L.ft_paste.format(r.clip.length));
+		bshr.setAttribute('tt', nsel ? L.fs_ss : L.fs_sc);
 	};
 
 	r.fsi = function (sel) {
@@ -3547,20 +4271,211 @@ var fileman = (function () {
 		return ret;
 	};
 
+	r.share = function (e) {
+		ev(e);
+
+		var vp = uricom_dec(get_evpath()),
+			sel = msel.getsel(),
+			fns = [];
+
+		for (var a = 0; a < sel.length; a++)
+			fns.push(uricom_dec(noq_href(ebi(sel[a].id))));
+
+		if (fns.length == 1 && fns[0].endsWith('/'))
+			vp = fns.pop();
+
+		for (var a = 0; a < fns.length; a++)
+			if (fns[a].endsWith('/'))
+				return toast.err(10, L.fs_just1d);
+
+		var shui = ebi('shui');
+		if (!shui) {
+			shui = mknod('div', 'shui');
+			document.body.appendChild(shui);
+		}
+		shui.style.display = 'block';
+
+		var html = [
+			'<div>',
+			'<table>',
+			'<tr><td colspan="2">',
+			'<button id="sh_abrt">' + L.fs_abrt + '</button>',
+			'<button id="sh_rand">' + L.fs_rand + '</button>',
+			'<button id="sh_apply">' + L.fs_go + '</button>',
+			'</td></tr>',
+			'<tr><td>' + L.fs_name + '</td><td><input type="text" id="sh_k" ' + NOAC + ' placeholder="  ' + L.fs_pname + '" /></td></tr>',
+			'<tr><td>' + L.fs_src + '</td><td><input type="text" id="sh_vp" ' + NOAC + ' readonly tt="' + L.fs_tsrc + '" /></td></tr>',
+			'<tr><td>' + L.fs_pwd + '</td><td><input type="text" id="sh_pw" ' + NOAC + ' placeholder="  ' + L.fs_ppwd + '" /></td></tr>',
+			'<tr><td>' + L.fs_exp + '</td><td class="exs">',
+			'<input type="text" id="sh_exm" ' + NOAC + ' /> ' + L.fs_tmin + ' / ',
+			'<input type="text" id="sh_exh" ' + NOAC + ' /> ' + L.fs_thrs + ' / ',
+			'<input type="text" id="sh_exd" ' + NOAC + ' /> ' + L.fs_tdays + ' / ',
+			'<button id="sh_noex">' + L.fs_never + '</button>',
+			'</td></tr>',
+			'<tr><td>perms</td><td class="sh_axs">',
+		];
+		for (var a = 0; a < perms.length; a++)
+			if (!has(['admin', 'move'], perms[a]))
+				html.push('<a href="#" class="tgl btn">' + perms[a] + '</a>');
+
+		if (has(perms, 'write'))
+			html.push('<a href="#" class="btn">write-only</a>');
+
+		html.push('</td></tr></div');
+		shui.innerHTML = html.join('\n');
+
+		var sh_rand = ebi('sh_rand'),
+			sh_abrt = ebi('sh_abrt'),
+			sh_apply = ebi('sh_apply'),
+			sh_noex = ebi('sh_noex'),
+			exm = ebi('sh_exm'),
+			exh = ebi('sh_exh'),
+			exd = ebi('sh_exd'),
+			sh_k = ebi('sh_k'),
+			sh_vp = ebi('sh_vp'),
+			sh_pw = ebi('sh_pw');
+
+		function setexp(a, b) {
+			a = parseFloat(a);
+			if (!isNum(a))
+				return;
+
+			var v = a * b;
+			swrite('fsh_exp', v);
+
+			if (exm.value != v) exm.value = Math.round(v * 10) / 10; v /= 60;
+			if (exh.value != v) exh.value = Math.round(v * 10) / 10; v /= 24;
+			if (exd.value != v) exd.value = Math.round(v * 10) / 10;
+		}
+		function setdef() {
+			setexp(icfg_get('fsh_exp', 60 * 24), 1);
+		}
+		setdef();
+
+		exm.oninput = function () { setexp(this.value, 1); };
+		exh.oninput = function () { setexp(this.value, 60); };
+		exd.oninput = function () { setexp(this.value, 60 * 24); };
+		exm.onfocus = exh.onfocus = exd.onfocus = function () {
+			this.value = '';
+		};
+		sh_noex.onclick = function () {
+			setexp(0, 1);
+		};
+		exm.onblur = exh.onblur = exd.onblur = setdef;
+
+		exm.onkeydown = exh.onkeydown = exd.onkeydown =
+		sh_k.onkeydown = sh_pw.onkeydown = function (e) {
+			var kc = (e.key || e.code) + '';
+			if (kc.endsWith('Enter'))
+				sh_apply.click();
+		};
+
+		sh_abrt.onclick = function () {
+			shui.parentNode.removeChild(shui);
+		};
+		sh_rand.onclick = function () {
+			sh_k.value = randstr(12).replace(/l/g, 'n');
+		};
+		tt.att(shui);
+
+		var pbtns = QSA('#shui .sh_axs a');
+		for (var a = 0; a < pbtns.length; a++)
+			pbtns[a].onclick = shspf;
+
+		function shspf() {
+			clmod(this, 'on', 't');
+			if (this.textContent == 'write-only')
+				for (var a = 0; a < pbtns.length; a++)
+					clmod(pbtns[a], 'on', pbtns[a].textContent == 'write');
+		}
+		clmod(pbtns[0], 'on', 1);
+
+		var vpt = vp;
+		if (fns.length) {
+			vpt = fns.length + ' files in ' + vp + '  '
+			for (var a = 0; a < fns.length; a++)
+				vpt += '「' + fns[a].split('/').pop() + '」';
+		}
+		sh_vp.value = vpt;
+
+		sh_k.oninput = function (e) {
+			var v = this.value,
+				v2 = v.replace(/[^0-9a-zA-Z-]/g, '_');
+
+			if (v != v2)
+				this.value = v2;
+		};
+
+		function shr_cb() {
+			toast.hide();
+			var surl = this.responseText;
+			if (this.status !== 201 || !/^created share:/.exec(surl)) {
+				shui.style.display = 'block';
+				var msg = unpre(surl);
+				toast.err(9, msg);
+				return;
+			}
+			surl = surl.slice(15).trim();
+			var txt = esc(surl) + '<img class="b64" width="100" height="100" src="' + surl + '?qr" />';
+			modal.confirm(txt + L.fs_ok, function() {
+				cliptxt(surl, function () {
+					toast.ok(2, L.clipped);
+				});
+			}, null);
+		}
+
+		sh_apply.onclick = function () {
+			if (!sh_k.value)
+				sh_rand.click();
+
+			var plist = [];
+			for (var a = 0; a < pbtns.length; a++)
+				if (clgot(pbtns[a], 'on'))
+					plist.push(pbtns[a].textContent);
+
+			shui.style.display = 'none';
+			toast.inf(30, L.fs_w8);
+
+			var body = {
+				"k": sh_k.value,
+				"vp": fns.length ? fns : [sh_vp.value],
+				"pw": sh_pw.value,
+				"exp": exm.value,
+				"perms": plist,
+			};
+			var xhr = new XHR();
+			xhr.open('POST', SR + '/?share', true);
+			xhr.setRequestHeader('Content-Type', 'text/plain');
+			xhr.onload = xhr.onerror = shr_cb;
+			xhr.send(JSON.stringify(body));
+		};
+
+		setTimeout(sh_pw.focus.bind(sh_pw), 1);
+	};
+
 	r.rename = function (e) {
 		ev(e);
-		if (clgot(bren, 'hide'))
-			return toast.err(3, L.fr_eperm);
-
-		var sel = msel.getsel();
+		var sel = msel.getsel(),
+			all = msel.all;
 		if (!sel.length)
 			return toast.err(3, L.fr_emore);
 
+		if (clgot(bren, 'hide'))
+			return toast.err(3, L.fr_eperm);
+
 		var f = [],
+			sn = ++r.sn,
 			base = vsplit(sel[0].vp)[0],
+			s2d = {},
 			mkeys;
 
+		r.f = f;
+		r.n_s = 1;
+		r.n_d = 1;
+
 		for (var a = 0; a < sel.length; a++) {
+			s2d[a] = all.indexOf(sel[a]);
+
 			var vp = sel[a].vp;
 			if (vp.endsWith('/'))
 				vp = vp.slice(0, -1);
@@ -3570,9 +4485,10 @@ var fileman = (function () {
 				return toast.err(0, esc('bug:\n' + base + '\n' + vsp[0]));
 
 			var vars = ft2dict(ebi(sel[a].id).closest('tr'));
-			mkeys = vars[1].concat(vars[2]);
+			mkeys = [".n.d", ".n.s"].concat(vars[1], vars[2]);
 
 			var md = vars[0];
+			md[".n.s"] = md[".n.d"] = 0;
 			for (var k in md) {
 				if (!md.hasOwnProperty(k))
 					continue;
@@ -3602,9 +4518,9 @@ var fileman = (function () {
 
 		var html = sel.length > 1 ? ['<div>'] : [
 			'<div>',
-			'<button class="rn_dec" n="0" tt="' + L.frt_dec + '</button>',
+			'<button class="rn_dec" id="rn_dec_0" tt="' + L.frt_dec + '</button>',
 			'//',
-			'<button class="rn_reset" n="0" tt="' + L.frt_rst + '</button>'
+			'<button class="rn_reset" id="rn_reset_0" tt="' + L.frt_rst + '</button>'
 		];
 
 		html = html.concat([
@@ -3612,23 +4528,31 @@ var fileman = (function () {
 			'<button id="rn_apply">✅ ' + L.frb_apply + '</button>',
 			'<a id="rn_adv" class="tgl btn" href="#" tt="' + L.fr_adv + '</a>',
 			'<a id="rn_case" class="tgl btn" href="#" tt="' + L.fr_case + '</a>',
+			'<a id="rn_win" class="tgl btn" href="#" tt="' + L.fr_win + '</a>',
+			'<a id="rn_slash" class="tgl btn" href="#" tt="' + L.fr_slash + '</a>',
 			'</div>',
 			'<div id="rn_vadv"><table>',
-			'<tr><td>regex</td><td><input type="text" id="rn_re" ' + NOAC + ' tt="regex search pattern to apply to original filenames; capturing groups can be referenced in the format field below like &lt;code&gt;(1)&lt;/code&gt; and &lt;code&gt;(2)&lt;/code&gt; and so on" placeholder="^[0-9]+[\\. ]+(.*) - (.*)" /></td></tr>',
-			'<tr><td>format</td><td><input type="text" id="rn_fmt" ' + NOAC + ' tt="inspired by foobar2000:$N&lt;code&gt;(title)&lt;/code&gt; is replaced by song title,$N&lt;code&gt;[(artist) - ](title)&lt;/code&gt; skips the first part if artist is blank$N&lt;code&gt;$lpad((tn),2,0)&lt;/code&gt; pads tracknumber to 2 digits" placeholder="[(artist) - ](title).(ext)" /></td></tr>',
+			'<tr><td>regex</td><td><input type="text" id="rn_re" ' + NOAC + ' tt="' + L.fr_re + '" placeholder="^[0-9]+[\\. ]+(.*) - (.*)" /></td></tr>',
+			'<tr><td>format</td><td><input type="text" id="rn_fmt" ' + NOAC + ' tt="' + L.fr_fmt + '" placeholder="[(artist) - ](title).(ext)" /></td></tr>',
 			'<tr><td>preset</td><td><select id="rn_pre"></select>',
+			'<tr><td>num0</td><td>',
+			'<code>n.d=</code><input type="text" id="rn_n_d" placeholder="1" ' + NOAC + ' /> &nbsp;',
+			'<code>n.s=</code><input type="text" id="rn_n_s" placeholder="1" ' + NOAC + ' />',
+			'</td></tr>',
 			'<button id="rn_pdel">❌ ' + L.fr_pdel + '</button>',
 			'<button id="rn_pnew">💾 ' + L.fr_pnew + '</button>',
 			'</td></tr>',
 			'</table></div>'
 		]);
 
-		var cheap = f.length > 500;
+		var cheap = f.length > 500,
+			t_rst = L.frt_rst.split('>').pop();
+
 		if (sel.length == 1)
 			html.push(
 				'<div><table id="rn_f">\n' +
-				'<tr><td>old:</td><td><input type="text" id="rn_old" n="0" readonly /></td></tr>\n' +
-				'<tr><td>new:</td><td><input type="text" id="rn_new" n="0" /></td></tr>');
+				'<tr><td>old:</td><td><input type="text" id="rn_old_0" readonly /></td></tr>\n' +
+				'<tr><td>new:</td><td><input type="text" id="rn_new_0" /></td></tr>');
 		else {
 			html.push(
 				'<div><table id="rn_f" class="m">' +
@@ -3637,10 +4561,10 @@ var fileman = (function () {
 				html.push(
 					'<tr><td>' +
 					(cheap ? '</td>' :
-						'<button class="rn_dec" n="' + a + '">decode</button>' +
-						'<button class="rn_reset" n="' + a + '">↺ reset</button></td>') +
-					'<td><input type="text" id="rn_new" n="' + a + '" /></td>' +
-					'<td><input type="text" id="rn_old" n="' + a + '" readonly /></td></tr>');
+						'<button class="rn_dec" id="rn_dec_' + a + '">decode</button>' +
+						'<button class="rn_reset" id="rn_reset_' + a + '">' + t_rst + '</button></td>') +
+					'<td><input type="text" id="rn_new_' + a + '" /></td>' +
+					'<td><input type="text" id="rn_old_' + a + '" readonly /></td></tr>');
 		}
 		html.push('</table></div>');
 
@@ -3654,23 +4578,23 @@ var fileman = (function () {
 
 		rui.innerHTML = html.join('\n');
 		for (var a = 0; a < f.length; a++) {
-			var k = '[n="' + a + '"]';
-			f[a].iold = QS('#rn_old' + k);
-			f[a].inew = QS('#rn_new' + k);
+			f[a].iold = ebi('rn_old_' + a);
+			f[a].inew = ebi('rn_new_' + a);
 			f[a].inew.value = f[a].iold.value = f[a].ofn;
 
 			if (!cheap)
 				(function (a) {
 					f[a].inew.onkeydown = function (e) {
 						rn_ok(a, true);
-						if (e.key.endsWith('Enter'))
+						var kc = (e.key || e.code) + '';
+						if (kc.endsWith('Enter'))
 							return rn_apply();
 					};
-					QS('.rn_dec' + k).onclick = function (e) {
+					ebi('rn_dec_' + a).onclick = function (e) {
 						ev(e);
 						f[a].inew.value = uricom_dec(f[a].inew.value);
 					};
-					QS('.rn_reset' + k).onclick = function (e) {
+					ebi('rn_reset_' + a).onclick = function (e) {
 						ev(e);
 						rn_reset(a);
 					};
@@ -3684,6 +4608,8 @@ var fileman = (function () {
 		}
 		bcfg_bind(r, 'adv', 'rn_adv', false, sadv);
 		bcfg_bind(r, 'cs', 'rn_case', false);
+		bcfg_bind(r, 'win', 'rn_win', true);
+		bcfg_bind(r, 'slash', 'rn_slash', true);
 		sadv();
 
 		function rn_ok(n, ok) {
@@ -3710,6 +4636,9 @@ var fileman = (function () {
 			idel = ebi('rn_pdel'),
 			inew = ebi('rn_pnew'),
 			defp = '$lpad((tn),2,0). [(artist) - ](title).(ext)';
+
+		ire.value = sread('cpp_rn_re') || '';
+		ifmt.value = sread('cpp_rn_fmt') || '';
 
 		var presets = {};
 		presets[defp] = ['', defp];
@@ -3754,11 +4683,22 @@ var fileman = (function () {
 		};
 		spresets();
 
+		ebi('rn_n_s').oninput = function () {
+			r.n_s = parseInt(this.value || '1');
+			ifmt.oninput();
+		};
+		ebi('rn_n_d').oninput = function () {
+			r.n_d = parseInt(this.value || '1');
+			ifmt.oninput();
+		};
+
 		ire.onkeydown = ifmt.onkeydown = function (e) {
-			if (e.key == 'Escape')
+			var k = (e.key || e.code) + '';
+
+			if (k == 'Escape' || k == 'Esc')
 				return rn_cancel();
 
-			if (e.key.endsWith('Enter'))
+			if (k.endsWith('Enter'))
 				return rn_apply();
 		};
 
@@ -3781,14 +4721,18 @@ var fileman = (function () {
 
 			for (var a = 0; a < f.length; a++) {
 				var m = re ? re.exec(f[a].ofn) : null,
+					d = f[a].md,
 					ok, txt = '';
+
+				d[".n.s"] = d["n.s"] = '' + (r.n_s + a);
+				d[".n.d"] = d["n.d"] = '' + (r.n_d + s2d[a]);
 
 				if (re && !m) {
 					txt = 'regex did not match';
 					ok = false;
 				}
 				else {
-					var ret = fmt_ren(m, f[a].md, fmt);
+					var ret = fmt_ren(m, d, fmt);
 					ok = ret[0];
 					txt = ret[1];
 				}
@@ -3799,6 +4743,26 @@ var fileman = (function () {
 
 		function rn_apply(e) {
 			ev(e);
+			swrite('cpp_rn_re', ire.value);
+			swrite('cpp_rn_fmt', ifmt.value);
+			if (r.win || r.slash) {
+				var changed = 0;
+				for (var a = 0; a < f.length; a++) {
+					var ov = f[a].inew.value,
+						nv = namesan(ov, r.win, r.slash);
+
+					if (ov != nv) {
+						f[a].inew.value = nv;
+						changed++;
+					}
+				}
+				if (changed)
+					return modal.confirm(L.fr_nchg.format(changed), rn_apply_loop, null);
+			}
+			rn_apply_loop();
+		}
+
+		function rn_apply_loop() {
 			while (f.length && (!f[0].ok || f[0].ofn == f[0].inew.value))
 				f.shift();
 
@@ -3808,7 +4772,9 @@ var fileman = (function () {
 				return rn_cancel();
 			}
 
-			toast.show('inf r', 0, esc(L.fr_busy.format(f.length, f[0].ofn)));
+			var msg = esc(L.fr_busy.format(f.length, f[0].ofn));
+			msg += '\n<a id="fs_abrt" class="btn" href="#" onclick="fs_abrt()">' + L.fs_abrt + '</a>';
+			toast.show('inf r', 0, msg);
 			var dst = base + uricom_enc(f[0].inew.value, false);
 
 			function rename_cb() {
@@ -3817,24 +4783,25 @@ var fileman = (function () {
 					toast.err(9, L.fr_efail + msg);
 					return;
 				}
+				if (r.sn != sn)
+					return modal.confirm('WARNING: the rename was aborted');
 
 				f.shift().inew.value = '( OK )';
-				return rn_apply();
+				return rn_apply_loop();
 			}
 
+			abrt_key = randstr(9);
+
 			var xhr = new XHR();
-			xhr.open('POST', f[0].src + '?move=' + dst, true);
+			xhr.open('POST', f[0].src + '?move=' + dst + '&akey=' + abrt_key, true);
 			xhr.onload = xhr.onerror = rename_cb;
 			xhr.send();
 		}
 	};
 
 	r.delete = function (e) {
-		ev(e);
-		if (clgot(bdel, 'hide'))
-			return toast.err(3, L.fd_eperm);
-
 		var sel = msel.getsel(),
+			sn = ++r.sn,
 			vps = [];
 
 		for (var a = 0; a < sel.length; a++)
@@ -3842,6 +4809,11 @@ var fileman = (function () {
 
 		if (!sel.length)
 			return toast.err(3, L.fd_emore);
+
+		ev(e);
+
+		if (clgot(bdel, 'hide'))
+			return toast.err(3, L.fd_eperm);
 
 		function deleter(err) {
 			var xhr = new XHR(),
@@ -3866,6 +4838,9 @@ var fileman = (function () {
 				toast.err(9, L.fd_err + msg);
 				return;
 			}
+			if (r.sn != sn)
+				return modal.confirm('WARNING: the delete was aborted');
+
 			if (this.responseText.indexOf('deleted 0 files (and 0') + 1) {
 				toast.err(9, L.fd_none);
 				return deleter('xbd');
@@ -3873,21 +4848,32 @@ var fileman = (function () {
 			deleter();
 		}
 
-		modal.confirm('<h6 style="color:#900">DANGER</h6>\n<b>' + L.fd_warn1.format(vps.length) + '</b><ul>' + uricom_adec(vps, true).join('') + '</ul>', function () {
+		var asks = r.qdel ? 1 : 2;
+		if (dqdel === 0)
+			asks -= 1;
+
+		if (!asks)
+			return deleter();
+
+		modal.confirm('<h6 style="color:#900">' + L.danger + '</h6>\n<b>' + L.fd_warn1.format(vps.length) + '</b><ul>' + uricom_adec(vps, true).join('') + '</ul>', function () {
+			if (asks === 1)
+				return deleter();
 			modal.confirm(L.fd_warn2, deleter, null);
 		}, null);
 	};
 
 	r.cut = function (e) {
-		ev(e);
-		if (clgot(bcut, 'hide'))
-			return toast.err(3, L.fc_eperm);
-
 		var sel = msel.getsel(),
-			vps = [];
+			stamp = Date.now(),
+			vps = [stamp];
 
 		if (!sel.length)
-			toast.err(3, L.fc_emore);
+			return toast.err(3, L.fc_emore);
+
+		ev(e);
+
+		if (clgot(bcut, 'hide'))
+			return toast.err(3, L.fc_eperm);
 
 		var els = [], griden = thegrid.en;
 		for (var a = 0; a < sel.length; a++) {
@@ -3912,9 +4898,11 @@ var fileman = (function () {
 			catch (ex) { }
 		}, 1);
 
+		r.ccp = false;
+		r.clip = vps.slice(1);
+
 		try {
-			var stamp = Date.now();
-			vps = JSON.stringify([stamp].concat(vps));
+			vps = JSON.stringify(vps);
 			if (vps.length > 1024 * 1024)
 				throw 'a';
 
@@ -3928,73 +4916,284 @@ var fileman = (function () {
 		}
 	};
 
-	r.paste = function (e) {
-		ev(e);
-		if (clgot(bpst, 'hide'))
-			return toast.err(3, L.fp_eperm);
+	r.cpy = function (e) {
+		var sel = msel.getsel(),
+			stamp = Date.now(),
+			vps = [stamp, '//c'];
 
+		if (!sel.length)
+			return toast.err(3, L.fcp_emore);
+
+		ev(e);
+
+		var els = [], griden = thegrid.en;
+		for (var a = 0; a < sel.length; a++) {
+			vps.push(sel[a].vp);
+			if (sel.length < 100)
+				try {
+					if (griden)
+						els.push(QS('#ggrid>a[ref="' + sel[a].id + '"]'));
+					else
+						els.push(ebi(sel[a].id).closest('tr'));
+
+					clmod(els[a], 'fcut');
+				}
+				catch (ex) { }
+		}
+
+		setTimeout(function () {
+			try {
+				for (var a = 0; a < els.length; a++)
+					clmod(els[a], 'fcut', 1);
+			}
+			catch (ex) { }
+		}, 1);
+
+		if (vps.length < 3)
+			vps.pop();
+
+		r.ccp = true;
+		r.clip = vps.slice(2);
+
+		try {
+			vps = JSON.stringify(vps);
+			if (vps.length > 1024 * 1024)
+				throw 'a';
+
+			swrite('fman_clip', vps);
+			r.tx(stamp);
+			if (sel.length)
+				toast.inf(1.5, L.fcc_ok.format(sel.length));
+		}
+		catch (ex) {
+			toast.warn(30, L.fcc_warn.format(sel.length));
+		}
+	};
+
+	document.onpaste = function (e) {
+		var xfer = e.clipboardData || window.clipboardData;
+		if (!xfer || !xfer.files || !xfer.files.length)
+			return;
+
+		var files = [];
+		for (var a = 0, aa = xfer.files.length; a < aa; a++)
+			files.push(xfer.files[a]);
+
+		clearTimeout(t_paste);
+
+		if (!r.clip.length)
+			return r.clip_up(files);
+
+		var src = r.clip.length == 1 ? r.clip[0] : vsplit(r.clip[0])[0],
+			msg = (r.ccp ? L.fcp_both_m : L.fp_both_m).format(r.clip.length, src, files.length);
+
+		modal.confirm(msg, r.paste, function () { r.clip_up(files); }, null, (r.ccp ? L.fcp_both_b : L.fp_both_b));
+	};
+
+	r.clip_up = function (files) {
+		goto_up2k();
+		var good = [], nil = [], bad = [];
+		for (var a = 0, aa = files.length; a < aa; a++) {
+			var fobj = files[a], dst = good;
+			try {
+				if (fobj.size < 1)
+					dst = nil;
+			}
+			catch (ex) {
+				dst = bad;
+			}
+			dst.push([fobj, fobj.name]);
+		}
+		var doit = function (is_img) {
+			jwrite('fman_clip', [Date.now()]);
+			r.clip = [];
+
+			var x = up2k.uc.ask_up;
+			if (is_img)
+				up2k.uc.ask_up = false;
+
+			up2k.gotallfiles[0](good, nil, bad, up2k.gotallfiles.slice(1));
+			up2k.uc.ask_up = x;
+		};
+		if (good.length != 1)
+			return doit();
+
+		var fn = good[0][1],
+			ofs = fn.lastIndexOf('.');
+
+		// stop linux-chrome from adding the fs-path into the <input>
+		setTimeout(function () {
+			modal.prompt(L.fp_name, fn, function (v) {
+				good[0][1] = v;
+				doit(true);
+			}, null, null, 0, ofs > 0 ? ofs : undefined);
+		}, 1);
+	};
+
+	r.d_paste = function () {
+		// gets called before onpaste; defer
+		clearTimeout(t_paste);
+		t_paste = setTimeout(r.paste, 50);
+	};
+
+	r.paste = function () {
 		if (!r.clip.length)
 			return toast.err(5, L.fp_ecut);
 
-		var req = [],
-			exists = [],
+		if (clgot(bpst, 'hide'))
+			return toast.err(3, L.fp_eperm);
+
+		var html = [
+				'<div>',
+				'<button id="rn_cancel" tt="' + L.frt_abrt + '</button>',
+				'<button id="rn_apply">✅ ' + L.fp_apply + '</button>',
+				' &nbsp; src: ' + esc(r.clip[0].replace(/[^/]+$/, '')),
+				'</div>',
+				'<p id="cnmt"></p>',
+				'<div><table id="rn_f" class="m">',
+				'<tr><td>' + L.fr_lnew + '</td><td>' + L.fr_lold + '</td></tr>',
+			],
+			sn = ++r.sn,
+			ui = false,
+			f = [],
 			indir = [],
 			srcdir = vsplit(r.clip[0])[0],
 			links = QSA('#files tbody td:nth-child(2) a');
 
+		r.f = f;
+
 		for (var a = 0, aa = links.length; a < aa; a++)
-			indir.push(vsplit(noq_href(links[a]))[1]);
+			indir.push(uricom_dec(vsplit(noq_href(links[a]))[1]));
 
 		for (var a = 0; a < r.clip.length; a++) {
-			var found = false;
-			for (var b = 0; b < indir.length; b++) {
-				if (r.clip[a].endsWith('/' + indir[b])) {
-					exists.push(r.clip[a]);
-					found = true;
+			var t = {
+				'ok': true,
+				'src': r.clip[a],
+				'dst': uricom_dec(r.clip[a].split('/').pop()),
+			};
+			f.push(t);
+
+			for (var b = 0; b < indir.length; b++)
+				if (t.dst == indir[b]) {
+					t.ok = false;
+					ui = true;
 				}
-			}
-			if (!found)
-				req.push(r.clip[a]);
+
+			html.push('<tr' + (!t.ok ? ' class="ng"' : '') + '><td><input type="text" id="rn_new_' + a + '" value="' + esc(t.dst) + '" /></td><td><input type="text" id="rn_old_' + a + '" value="' + esc(t.dst) + '" readonly /></td></tr>');
 		}
 
-		if (exists.length)
-			toast.warn(30, L.fp_ename.format(exists.length) + '<ul>' + uricom_adec(exists, true).join('') + '</ul>');
-
-		if (!req.length)
-			return;
-
 		function paster() {
-			var xhr = new XHR(),
-				vp = req.shift();
-
-			if (!vp) {
-				toast.ok(2, L.fp_ok);
+			var t = f.shift();
+			if (!t) {
+				toast.ok(2, r.ccp ? L.fcp_ok : L.fp_ok);
 				treectl.goto();
 				r.tx(srcdir);
 				return;
 			}
-			toast.show('inf r', 0, esc(L.fp_busy.format(req.length + 1, uricom_dec(vp))));
+			if (!t.dst)
+				return paster();
 
-			var dst = get_evpath() + vp.split('/').pop();
+			var msg = esc((r.ccp ? L.fcp_busy : L.fp_busy).format(f.length + 1, uricom_dec(t.src)));
+			msg += '\n<a id="fs_abrt" class="btn" href="#" onclick="fs_abrt()">' + L.fs_abrt + '</a>';
+			toast.show('inf r', 0, msg);
 
-			xhr.open('POST', vp + '?move=' + dst, true);
+			var xhr = new XHR(),
+				act = r.ccp ? '?copy=' : '?move=',
+				dst = get_evpath() + uricom_enc(t.dst);
+
+			abrt_key = randstr(9);
+
+			xhr.open('POST', t.src + act + dst + '&akey=' + abrt_key, true);
 			xhr.onload = xhr.onerror = paste_cb;
 			xhr.send();
 		}
 		function paste_cb() {
 			if (this.status !== 201) {
 				var msg = unpre(this.responseText);
-				toast.err(9, L.fp_err + msg);
+				toast.err(9, (r.ccp ? L.fcp_err : L.fp_err) + msg);
 				return;
 			}
+			if (r.sn != sn)
+				return modal.confirm('WARNING: the paste was aborted');
+
 			paster();
 		}
-
-		modal.confirm(L.fp_confirm.format(req.length) + '<ul>' + uricom_adec(req, true).join('') + '</ul>', function () {
+		function okgo() {
 			paster();
 			jwrite('fman_clip', [Date.now()]);
-		}, null);
-	};
+		}
+
+		if (!ui) {
+			var src = [];
+			for (var a = 0; a < f.length; a++)
+				src.push(f[a].src);
+
+			return modal.confirm((r.ccp ? L.fcp_confirm : L.fp_confirm).format(f.length) + '<ul>' + uricom_adec(src, true).join('') + '</ul>', okgo, null);
+		}
+
+		var rui = ebi('rui');
+		if (!rui) {
+			rui = mknod('div', 'rui');
+			document.body.appendChild(rui);
+		}
+		html.push('</table>');
+		rui.innerHTML = html.join('\n');
+		tt.att(rui);
+
+		function rn_apply(e) {
+			for (var a = 0; a < f.length; a++)
+				if (!f[a].ok) {
+					toast.err(30, L.fp_emore);
+					return setcnmt(true);
+				}
+			rn_cancel(e);
+			okgo();
+		}
+		function rn_cancel(e) {
+			ev(e);
+			rui.parentNode.removeChild(rui);
+		}
+		ebi('rn_cancel').onclick = rn_cancel;
+		ebi('rn_apply').onclick = rn_apply;
+
+		var first_bad = 0;
+		function setcnmt(sel) {
+			var nbad = 0;
+			for (var a = 0; a < f.length; a++) {
+				if (f[a].ok)
+					continue;
+				if (!nbad)
+					first_bad = a;
+				nbad += 1;
+			}
+			ebi('cnmt').innerHTML = (r.ccp ? L.fcp_ename : L.fp_ename).format(nbad);
+			if (sel && nbad) {
+				var el = ebi('rn_new_' + first_bad);
+				el.focus();
+				el.setSelectionRange(0, el.value.lastIndexOf('.'), "forward");
+			}
+		}
+		setcnmt(true);
+
+		for (var a = 0; a < f.length; a++)
+			(function (a) {
+				var inew = ebi('rn_new_' + a);
+				inew.onkeydown = function (e) {
+					if (((e.key || e.code) + '').endsWith('Enter'))
+						return rn_apply();
+				};
+				inew.oninput = function (e) {
+					f[a].dst = this.value;
+					f[a].ok = true;
+					if (f[a].dst)
+						for (var b = 0; b < indir.length; b++)
+							if (indir[b] == this.value)
+								f[a].ok = false;
+					clmod(this.closest('tr'), 'ng', !f[a].ok);
+					setcnmt();
+				};
+			})(a);
+	}
 
 	function onmsg(msg) {
 		r.clip = null;
@@ -4029,17 +5228,23 @@ var fileman = (function () {
 		r.bus.onmessage();
 	};
 
+	bcfg_bind(r, 'qdel', 'qdel', dqdel == 1);
+
 	bren.onclick = r.rename;
 	bdel.onclick = r.delete;
 	bcut.onclick = r.cut;
+	bcpy.onclick = r.cpy;
 	bpst.onclick = r.paste;
+	bshr.onclick = r.share;
 
 	return r;
 })();
 
 
 var showfile = (function () {
-	var r = {};
+	var r = {
+		'nrend': 0,
+	};
 	r.map = {
 		'.ahk': 'autohotkey',
 		'.bas': 'basic',
@@ -4082,6 +5287,12 @@ var showfile = (function () {
 		return srch.split(/[?&]doc=/)[1].split('&')[0];
 	};
 
+	if (window.og_fn) {
+		var ext = og_fn.split(/\./g).pop();
+		if (r.map['.' + ext])
+			hist_replace(get_evpath() + '?doc=' + og_fn);
+	}
+
 	window.Prism = { 'manual': true };
 	var em = QS('#bdoc>pre');
 	if (em)
@@ -4102,12 +5313,12 @@ var showfile = (function () {
 		qsr('#prism_css');
 		var el = mknod('link', 'prism_css');
 		el.rel = 'stylesheet';
-		el.href = SR + '/.cpr/deps/prism' + (light ? '' : 'd') + '.css';
+		el.href = SR + '/.cpr/deps/prism' + (light ? '' : 'd') + '.css?_=' + TS;
 		document.head.appendChild(el);
 	};
 
 	r.active = function () {
-		return location.search.indexOf('doc=') + 1;
+		return !!/[?&]doc=/.exec(location.search);
 	};
 
 	r.getlang = function (fn) {
@@ -4129,31 +5340,100 @@ var showfile = (function () {
 
 			r.files.push({ 'id': link.id, 'name': uricom_dec(fn) });
 
-			var td = ebi(link.id).closest('tr').getElementsByTagName('td')[0];
+			var ah = ebi(link.id),
+				td = ah.closest('tr').getElementsByTagName('td')[0];
 
-			if (lang == 'md' && td.textContent != '-')
+			if (ah.textContent.endsWith('/'))
+				continue;
+
+			if (lang == 'ts' || (lang == 'md' && td.textContent != '-'))
 				continue;
 
 			td.innerHTML = '<a href="#" id="t' +
 				link.id + '" class="doc bri" hl="' +
-				link.id + '">-txt-</a>';
+				link.id + '" rel="nofollow">-txt-</a>';
 
 			td.getElementsByTagName('a')[0].setAttribute('href', '?doc=' + fn);
 		}
 		r.mktree();
 		if (em) {
-			render(em);
+			if (r.taildoc)
+				r.show(em[0], true);
+			else
+				render(em);
 			em = null;
 		}
 	};
 
+	r.tail = function (url, no_push) {
+		r.abrt = new AbortController();
+		widget.setvis();
+		render([url, '', ''], no_push);
+		var me = r.tail_id = Date.now(),
+			wfp = ebi('wfp'),
+			edoc = ebi('doc'),
+			txt = '';
+
+		url = addq(url, 'tail=-' + r.tailnb);
+		fetch(url, {'signal': r.abrt.signal}).then(function(rsp) {
+			var ro = rsp.body.pipeThrough(
+				new TextDecoderStream('utf-8', {'fatal': false}),
+				{'signal': r.abrt.signal}).getReader();
+
+			var rf = function() {
+				ro.read().then(function(v) {
+					if (r.tail_id != me)
+						return;
+					var vt = v.done ? '\n*** lost connection to copyparty ***' : v.value;
+					if (vt == '\x00')
+						return rf();
+					txt += vt;
+					var ofs = txt.length - r.tailnb;
+					if (ofs > 0) {
+						var ofs2 = txt.indexOf('\n', ofs);
+						if (ofs2 >= ofs && ofs - ofs2 < 512)
+							ofs = ofs2;
+						txt = txt.slice(ofs);
+					}
+					var html = esc(txt);
+					if (r.tailansi)
+						html = r.ansify(html);
+					edoc.innerHTML = html;
+					if (r.tail2end)
+						window.scrollTo(0, wfp.offsetTop - window.innerHeight);
+					if (!v.done)
+						rf();
+				});
+			};
+			if (r.tail_id == me)
+				rf();
+		});
+	};
+
+	r.untail = function () {
+		if (!r.abrt)
+			return;
+		r.abrt.abort();
+		r.abrt = null;
+		r.tail_id = -1;
+		widget.setvis();
+	};
+
 	r.show = function (url, no_push) {
-		var xhr = new XHR();
+		r.untail();
+		var xhr = new XHR(),
+			m = /[?&](k=[^&#]+)/.exec(url);
+
+		url = url.split('?')[0] + (m ? '?' + m[1] : '');
+		assert_vp(url);
+		if (r.taildoc)
+			return r.tail(url, no_push);
+
 		xhr.url = url;
 		xhr.fname = uricom_dec(url.split('/').pop());
 		xhr.no_push = no_push;
 		xhr.ts = Date.now();
-		xhr.open('GET', url.split('?')[0], true);
+		xhr.open('GET', url, true);
 		xhr.onprogress = loading;
 		xhr.onload = xhr.onerror = load_cb;
 		xhr.send();
@@ -4188,23 +5468,28 @@ var showfile = (function () {
 
 	function render(doc, no_push) {
 		r.q = null;
-		var url = doc[0],
+		r.nrend++;
+		var url = r.url = doc[0],
 			lnh = doc[1],
 			txt = doc[2],
-			name = url.split('/').pop(),
+			name = url.split('?')[0].split('/').pop(),
 			tname = uricom_dec(name),
 			lang = r.getlang(name),
 			is_md = lang == 'md';
 
 		ebi('files').style.display = ebi('gfiles').style.display = ebi('lazy').style.display = ebi('pro').style.display = ebi('epi').style.display = 'none';
 		ebi('dldoc').setAttribute('href', url);
-		ebi('editdoc').setAttribute('href', url + (url.indexOf('?') > 0 ? '&' : '?') + 'edit');
+		ebi('editdoc').setAttribute('href', addq(url, 'edit'));
 		ebi('editdoc').style.display = (has(perms, 'write') && (is_md || has(perms, 'delete'))) ? '' : 'none';
 
 		var wr = ebi('bdoc'),
+			nrend = r.nrend,
 			defer = !Prism.highlightElement;
 
 		var fun = function (el) {
+			if (r.nrend != nrend)
+				return;
+
 			try {
 				if (lnh.slice(0, 5) == '#doc.')
 					sethash(lnh.slice(1));
@@ -4212,13 +5497,16 @@ var showfile = (function () {
 				el = el || QS('#doc>code');
 				Prism.highlightElement(el);
 				if (el.className == 'language-ans' || (!lang && /\x1b\[[0-9;]{0,16}m/.exec(txt.slice(0, 4096))))
-					r.ansify(el);
+					el.innerHTML = r.ansify(el.innerHTML);
 			}
 			catch (ex) { }
 		}
 
-		if (txt.length > 1024 * 256)
+		var skip_prism = !txt || txt.length > 1024 * 256;
+		if (skip_prism) {
 			fun = function (el) { };
+			is_md = false;
+		}
 
 		qsr('#doc');
 		var el = mknod('pre', 'doc');
@@ -4230,7 +5518,7 @@ var showfile = (function () {
 		else {
 			el.textContent = txt;
 			el.innerHTML = '<code>' + el.innerHTML + '</code>';
-			if (!window.no_prism) {
+			if (!window.no_prism && !skip_prism) {
 				if ((lang == 'conf' || lang == 'cfg') && ('\n' + txt).indexOf('\n# -*- mode: yaml -*-') + 1)
 					lang = 'yaml';
 
@@ -4240,6 +5528,8 @@ var showfile = (function () {
 				else
 					import_js(SR + '/.cpr/deps/prism.js', function () { fun(); });
 			}
+			if (!txt && r.wrap)
+				el.className = 'wrap';
 		}
 
 		wr.appendChild(el);
@@ -4249,7 +5539,7 @@ var showfile = (function () {
 		wintitle(tname + ' \u2014 ');
 		document.documentElement.scrollTop = 0;
 		var hfun = no_push ? hist_replace : hist_push;
-		hfun(get_evpath() + '?doc=' + url.split('/').pop());
+		hfun(get_evpath() + '?doc=' + name);  // can't dk: server wants dk and js needs fk
 
 		qsr('#docname');
 		el = mknod('span', 'docname');
@@ -4261,11 +5551,11 @@ var showfile = (function () {
 		tree_scrollto();
 	}
 
-	r.ansify = function (el) {
+	r.ansify = function (html) {
 		var ctab = (light ?
 			'bfbfbf d30253 497600 b96900 006fbb a50097 288276 2d2d2d 9f9f9f 943b55 3a5600 7f4f00 00507d 683794 004343 000000' :
 			'404040 f03669 b8e346 ffa402 02a2ff f65be3 3da698 d2d2d2 606060 c75b79 c8e37e ffbe4a 71cbff b67fe3 9cf0ed ffffff').split(/ /g),
-			src = el.innerHTML.split(/\x1b\[/g),
+			src = html.split(/\x1b\[/g),
 			out = ['<span>'], fg = 7, bg = null, bfg = 0, bbg = 0, inv = 0, bold = 0;
 
 		for (var a = 0; a < src.length; a++) {
@@ -4318,11 +5608,13 @@ var showfile = (function () {
 
 			out.push(s + '">' + txt);
 		}
-		el.innerHTML = out.join('');
+		return out.join('');
 	};
 
 	r.mktree = function () {
-		var html = ['<li class="bn">' + L.tv_lst + '<br />' + linksplit(get_vpath()).join('<span>/</span>') + '</li>'];
+		var top = get_evpath().slice(SR.length),
+			crumbs = linksplit(top).join('<span>/</span>'),
+			html = ['<li class="bn">' + L.tv_lst + '<br />' + crumbs + '</li>'];
 		for (var a = 0; a < r.files.length; a++) {
 			var file = r.files[a];
 			html.push('<li><a href="?doc=' +
@@ -4364,6 +5656,18 @@ var showfile = (function () {
 		msel.selui();
 	};
 
+	r.tgltail = function () {
+		if (!window.TextDecoderStream) {
+			bcfg_set('taildoc', r.taildoc = false);
+			return toast.err(10, L.tail_2old);
+		}
+		r.show(r.url, true);
+	};
+
+	r.tglwrap = function () {
+		r.show(r.url, true);
+	};
+
 	var bdoc = ebi('bdoc');
 	bdoc.className = 'line-numbers';
 	bdoc.innerHTML = (
@@ -4374,15 +5678,38 @@ var showfile = (function () {
 		'<a href="#" class="btn" id="nextdoc" tt="' + L.tvt_next + '</a>\n' +
 		'<a href="#" class="btn" id="seldoc" tt="' + L.tvt_sel + '</a>\n' +
 		'<a href="#" class="btn" id="editdoc" tt="' + L.tvt_edit + '</a>\n' +
+		'<a href="#" class="btn tgl" id="taildoc" tt="' + L.tvt_tail + '</a>\n' +
+		'<div id="tailbtns">\n' +
+		'<a href="#" class="btn tgl" id="wrapdoc" tt="' + L.tvt_wrap + '</a>\n' +
+		'<a href="#" class="btn tgl" id="tail2end" tt="' + L.tvt_atail + '</a>\n' +
+		'<a href="#" class="btn tgl" id="tailansi" tt="' + L.tvt_ctail + '</a>\n' +
+		'<input type="text" id="tailnb" value="" ' + NOAC + ' style="width:4em" tt="' + L.tvt_ntail + '" />' +
+		'</div>\n' +
 		'</div>'
 	);
 	ebi('xdoc').onclick = function () {
+		r.untail();
 		thegrid.setvis(true);
+		bcfg_bind(r, 'taildoc', 'taildoc', false, r.tgltail);
 	};
 	ebi('dldoc').setAttribute('download', '');
 	ebi('prevdoc').onclick = function () { tree_neigh(-1); };
 	ebi('nextdoc').onclick = function () { tree_neigh(1); };
 	ebi('seldoc').onclick = r.tglsel;
+	bcfg_bind(r, 'wrap', 'wrapdoc', true, r.tglwrap);
+	bcfg_bind(r, 'taildoc', 'taildoc', false, r.tgltail);
+	bcfg_bind(r, 'tail2end', 'tail2end', true);
+	bcfg_bind(r, 'tailansi', 'tailansi', false, r.tgltail);
+
+	r.tailnb = ebi('tailnb').value = icfg_get('tailnb', 131072);
+	ebi('tailnb').oninput = function (e) {
+		swrite('tailnb', r.tailnb = this.value);
+	};
+
+	if (/[?&]tail\b/.exec(sloc0)) {
+		clmod(ebi('taildoc'), 'on', 1);
+		r.taildoc = true;
+	}
 
 	return r;
 })();
@@ -4395,10 +5722,13 @@ var thegrid = (function () {
 	gfiles.style.display = 'none';
 	gfiles.innerHTML = (
 		'<div id="ghead" class="ghead">' +
+		'<a href="#" class="tgl btn" id="gridvau" tt="' + L.gt_vau + '</a> ' +
 		'<a href="#" class="tgl btn" id="gridsel" tt="' + L.gt_msel + '</a> ' +
-		'<a href="#" class="tgl btn" id="gridfull" tt="' + L.gt_full + '</a> <span>' + L.gt_zoom + ': ' +
-		'<a href="#" class="btn" z="-1.2" tt="Hotkey: shift-A">&ndash;</a> ' +
-		'<a href="#" class="btn" z="1.2" tt="Hotkey: shift-D">+</a></span> <span>' + L.gt_chop + ': ' +
+		'<a href="#" class="tgl btn" id="gridcrop" tt="' + L.gt_crop + '</a> ' +
+		'<a href="#" class="tgl btn" id="grid3x" tt="' + L.gt_3x + '</a> ' +
+		'<span>' + L.gt_zoom + ': ' +
+		'<a href="#" class="btn" z="-1.1" tt="Hotkey: shift-A">&ndash;</a> ' +
+		'<a href="#" class="btn" z="1.1" tt="Hotkey: shift-D">+</a></span> <span>' + L.gt_chop + ': ' +
 		'<a href="#" class="btn" l="-1" tt="' + L.gt_c1 + '">&ndash;</a> ' +
 		'<a href="#" class="btn" l="1" tt="' + L.gt_c2 + '">+</a></span> <span>' + L.gt_sort + ': ' +
 		'<a href="#" s="href">' + L.gt_name + '</a> ' +
@@ -4409,9 +5739,10 @@ var thegrid = (function () {
 		'<div id="ggrid"></div>'
 	);
 	lfiles.parentNode.insertBefore(gfiles, lfiles);
+	var ggrid = ebi('ggrid');
 
 	var r = {
-		'sz': clamp(fcfg_get('gridsz', 10), 4, 40),
+		'sz': clamp(fcfg_get('gridsz', 10), 4, 80),
 		'ln': clamp(icfg_get('gridln', 3), 1, 7),
 		'isdirty': true,
 		'bbox': null
@@ -4429,7 +5760,7 @@ var thegrid = (function () {
 		if (l)
 			return setln(parseInt(l));
 
-		var t = ebi('files').tHead.rows[0].cells;
+		var t = lfiles.tHead.rows[0].cells;
 		for (var a = 0; a < t.length; a++)
 			if (t[a].getAttribute('name') == s) {
 				t[a].click();
@@ -4448,16 +5779,19 @@ var thegrid = (function () {
 			if (!force)
 				return;
 
-			hist_push(get_evpath());
+			hist_push(get_evpath() + (dk ? '?k=' + dk : ''));
 			wintitle();
 		}
 
 		lfiles = ebi('files');
 		gfiles = ebi('gfiles');
+		ggrid = ebi('ggrid');
 
 		var vis = has(perms, "read");
 		gfiles.style.display = vis && r.en ? '' : 'none';
 		lfiles.style.display = vis && !r.en ? '' : 'none';
+		clmod(ggrid, 'crop', r.crop);
+		clmod(ggrid, 'nocrop', !r.crop);
 		ebi('pro').style.display = ebi('epi').style.display = ebi('lazy').style.display = ebi('treeul').style.display = ebi('treepar').style.display = '';
 		ebi('bdoc').style.display = 'none';
 		clmod(ebi('wrap'), 'doc');
@@ -4474,10 +5808,10 @@ var thegrid = (function () {
 
 	r.setdirty = function () {
 		r.dirty = true;
-		if (r.en) {
+		if (r.en)
 			loadgrid();
-		}
-		r.setvis();
+		else
+			r.setvis();
 	};
 
 	function setln(v) {
@@ -4488,23 +5822,18 @@ var thegrid = (function () {
 			swrite('gridln', r.ln);
 			setTimeout(r.tippen, 20);
 		}
-		try {
-			document.documentElement.style.setProperty('--grid-ln', r.ln);
-		}
-		catch (ex) { }
+		setcvar('--grid-ln', r.ln);
 	}
 	setln();
 
 	function setsz(v) {
 		if (v !== undefined) {
-			r.sz = clamp(v, 4, 40);
+			r.sz = clamp(v, 4, 80);
 			swrite('gridsz', r.sz);
 			setTimeout(r.tippen, 20);
 		}
-		try {
-			document.documentElement.style.setProperty('--grid-sz', r.sz + 'em');
-		}
-		catch (ex) { }
+		setcvar('--grid-sz', r.sz + 'em');
+		aligngriditems();
 	}
 	setsz();
 
@@ -4528,8 +5857,8 @@ var thegrid = (function () {
 			fid = oth.getAttribute('id'),
 			aplay = ebi('a' + fid),
 			atext = ebi('t' + fid),
-			is_txt = atext && showfile.getlang(href),
-			is_img = /\.(a?png|avif|bmp|gif|heif|jpe?g|jfif|svg|webp|webm|mkv|mp4)(\?|$)/i.test(href),
+			is_txt = atext && !/\.ts$/.test(href) && showfile.getlang(href),
+			is_img = img_re.test(href),
 			is_dir = href.endsWith('/'),
 			is_srch = !!ebi('unsearch'),
 			in_tree = is_dir && treectl.find(oth.textContent.slice(0, -1)),
@@ -4549,7 +5878,7 @@ var thegrid = (function () {
 		else if (oth.hasAttribute('download'))
 			oth.click();
 
-		else if (widget.is_open && aplay)
+		else if (aplay && (r.vau || !is_img))
 			aplay.click();
 
 		else if (is_dir && !have_sel)
@@ -4646,7 +5975,7 @@ var thegrid = (function () {
 				pels[a].removeAttribute('tt');
 		}
 
-		tt.att(ebi('ggrid'));
+		tt.att(ggrid);
 	};
 
 	function loadgrid() {
@@ -4657,28 +5986,57 @@ var thegrid = (function () {
 		if (!r.dirty)
 			return r.loadsel();
 
-		if (dfull != r.full && !sread('gridfull'))
-			bcfg_upd_ui('gridfull', r.full = dfull);
+		if (dcrop.startsWith('f') || !sread('gridcrop'))
+			bcfg_upd_ui('gridcrop', r.crop = ('y' == dcrop.slice(-1)));
+
+		if (dth3x.startsWith('f') || !sread('grid3x'))
+			bcfg_upd_ui('grid3x', r.x3 = ('y' == dth3x.slice(-1)));
 
 		var html = [],
 			svgs = new Set(),
 			max_svgs = CHROME ? 500 : 5000,
+			need_ext = !r.thumbs || !!ext_th,
+			use_ext_th = r.thumbs && ext_th,
 			files = QSA('#files>tbody>tr>td:nth-child(2) a[id]');
 
 		for (var a = 0, aa = files.length; a < aa; a++) {
 			var ao = files[a],
 				ohref = esc(ao.getAttribute('href')),
 				href = ohref.split('?')[0],
+				ext = '',
+				ext0 = '',
 				name = uricom_dec(vsplit(href)[1]),
 				ref = ao.getAttribute('id'),
 				isdir = href.endsWith('/'),
 				ac = isdir ? ' class="dir"' : '',
-				ihref = href;
+				ihref = ohref;
 
-			if (r.thumbs) {
-				ihref += '?th=' + (have_webp ? 'w' : 'j');
-				if (r.full)
-					ihref += 'f'
+			if (need_ext && href != "#") {
+				var ar = href.split('.');
+				if (ar.length > 1)
+					ar.shift();
+
+				ar.reverse();
+				ext0 = ar[0];
+				for (var b = 0; b < Math.min(2, ar.length); b++) {
+					if (ar[b].length > 7)
+						break;
+
+					ext = ext ? (ar[b] + '.' + ext) : ar[b];
+				}
+				if (!ext)
+					ext = 'unk';
+			}
+
+			if (use_ext_th && (ext_th[ext] || ext_th[ext0])) {
+				ihref = ext_th[ext] || ext_th[ext0];
+			}
+			else if (r.thumbs) {
+				ihref = addq(ihref, 'th=' + (have_webp ? 'w' : 'j'));
+				if (!r.crop)
+					ihref += 'f';
+				if (r.x3)
+					ihref += '3';
 				if (href == "#")
 					ihref = SR + '/.cpr/ico/' + (ref == 'moar' ? '++' : 'exit');
 			}
@@ -4686,22 +6044,6 @@ var thegrid = (function () {
 				ihref = SR + '/.cpr/ico/folder';
 			}
 			else {
-				var ar = href.split('.');
-				if (ar.length > 1)
-					ar = ar.slice(1);
-
-				ihref = '';
-				ar.reverse();
-				for (var b = 0; b < ar.length; b++) {
-					if (ar[b].length > 7)
-						break;
-
-					ihref = ar[b] + '.' + ihref;
-				}
-				if (!ihref) {
-					ihref = 'unk.';
-				}
-				var ext = ihref.slice(0, -1);
 				if (!svgs.has(ext)) {
 					if (svgs.size < max_svgs)
 						svgs.add(ext);
@@ -4710,14 +6052,18 @@ var thegrid = (function () {
 				}
 				ihref = SR + '/.cpr/ico/' + ext;
 			}
-			ihref += (ihref.indexOf('?') > 0 ? '&' : '?') + 'cache=i';
+			ihref = addq(ihref, 'cache=i&_=' + ACB + TS);
+			if (CHROME)
+				ihref += "&raster";
 
 			html.push('<a href="' + ohref + '" ref="' + ref +
 				'"' + ac + ' ttt="' + esc(name) + '"><img style="height:' +
-				(r.sz / 1.25) + 'em" onload="th_onload(this)" src="' +
+				(r.sz / 1.25) + 'em" loading="lazy" onload="th_onload(this)" src="' +
 				ihref + '" /><span' + ac + '>' + ao.innerHTML + '</span></a>');
 		}
-		ebi('ggrid').innerHTML = html.join('\n');
+		ggrid.innerHTML = html.join('\n');
+		clmod(ggrid, 'crop', r.crop);
+		clmod(ggrid, 'nocrop', !r.crop);
 
 		var srch = ebi('unsearch'),
 			gsel = ebi('gridsel');
@@ -4735,6 +6081,7 @@ var thegrid = (function () {
 		r.dirty = false;
 		r.bagit('#ggrid');
 		r.loadsel();
+		aligngriditems();
 		setTimeout(r.tippen, 20);
 	}
 
@@ -4745,27 +6092,104 @@ var thegrid = (function () {
 		if (r.bbox)
 			baguetteBox.destroy();
 
-		r.bbox = baguetteBox.run(isrc, {
-			captions: function (g) {
-				var idx = -1,
-					h = '' + g;
-
-				for (var a = 0; a < r.bbox.length; a++)
-					if (r.bbox[a].imageElement == g)
-						idx = a;
+		var br = baguetteBox.run(isrc, {
+			noScrollbars: true,
+			duringHide: r.onhide,
+			afterShow: function () {
+				r.bbox_opts.refocus = true;
+			},
+			captions: function (g, idx) {
+				var h = '' + g;
 
 				return '<a download href="' + h +
-					'">' + (idx + 1) + ' / ' + r.bbox.length + ' -- ' +
+					'">' + (idx + 1) + ' / ' + this.length + ' -- ' +
 					esc(uricom_dec(h.split('/').pop())) + '</a>';
 			},
-			onChange: function (i) {
-				sethash('g' + r.bbox[i].imageElement.getAttribute('ref'));
+			onChange: function (i, maxIdx) {
+				if (this[i].imageElement) {
+					sethash('g' + this[i].imageElement.getAttribute('ref') + getsort());
+				}
 			}
-		})[0];
+		});
+		r.bbox = true;
+		r.bbox_opts = br[1];
 	};
 
+	r.onhide = function () {
+		afilt.apply();
+
+		if (!thegrid.ihop)
+			return;
+
+		try {
+			var el = QS('#ggrid a[ref="' + location.hash.slice(2) + '"]'),
+				f = function () {
+					try {
+						el.focus();
+					}
+					catch (ex) { }
+				};
+
+			f();
+			setTimeout(f, 10);
+			setTimeout(f, 100);
+			setTimeout(f, 200);
+			// thx fullscreen api
+
+			if (ANIM) {
+				clmod(el, 'glow', 1);
+				setTimeout(function () {
+					try {
+						clmod(el, 'glow');
+					}
+					catch (ex) { }
+				}, 600);
+			}
+			r.bbox_opts.refocus = false;
+		}
+		catch (ex) {
+			console.log('ihop:', ex);
+		}
+	};
+
+	r.set_crop = function (en) {
+		if (!dcrop.startsWith('f'))
+			return r.setdirty();
+
+		r.crop = dcrop.endsWith('y');
+		bcfg_upd_ui('gridcrop', r.crop);
+		if (r.crop != en)
+			toast.warn(10, L.ul_btnlk);
+	};
+
+	r.set_x3 = function (en) {
+		if (!dth3x.startsWith('f'))
+			return r.setdirty();
+
+		r.x3 = dth3x.endsWith('y');
+		bcfg_upd_ui('grid3x', r.x3);
+		if (r.x3 != en)
+			toast.warn(10, L.ul_btnlk);
+	};
+
+	if (/[?&]grid\b/.exec(sloc0))
+		swrite('griden', /[?&]grid=0\b/.exec(sloc0) ? 0 : 1)
+
+	if (/[?&]thumb\b/.exec(sloc0))
+		swrite('thumbs', /[?&]thumb=0\b/.exec(sloc0) ? 0 : 1)
+
+	if (/[?&]imgs\b/.exec(sloc0)) {
+		var n = /[?&]imgs=0\b/.exec(sloc0) ? 0 : 1;
+		swrite('griden', n);
+		if (n)
+			swrite('thumbs', 1);
+	}
+
 	bcfg_bind(r, 'thumbs', 'thumbs', true, r.setdirty);
-	bcfg_bind(r, 'full', 'gridfull', false, r.setdirty);
+	bcfg_bind(r, 'ihop', 'ihop', true);
+	bcfg_bind(r, 'vau', 'gridvau', false);
+	bcfg_bind(r, 'crop', 'gridcrop', !dcrop.endsWith('n'), r.set_crop);
+	bcfg_bind(r, 'x3', 'grid3x', dth3x.endsWith('y'), r.set_x3);
 	bcfg_bind(r, 'sel', 'gridsel', false, r.loadsel);
 	bcfg_bind(r, 'en', 'griden', dgrid, function (v) {
 		v ? loadgrid() : r.setvis(true);
@@ -4800,8 +6224,8 @@ function tree_scrolltoo(q) {
 	var ctr = ebi('tree'),
 		em = parseFloat(getComputedStyle(act).fontSize),
 		top = act.offsetTop + ul.offsetTop,
-		min = top - 11 * em,
-		max = top - (ctr.offsetHeight - 10 * em);
+		min = top - 20 * em,
+		max = top - (ctr.offsetHeight - 16 * em);
 
 	if (ctr.scrollTop > min)
 		ctr.scrollTop = Math.floor(min);
@@ -4810,7 +6234,10 @@ function tree_scrolltoo(q) {
 }
 
 
-function tree_neigh(n) {
+function tree_neigh(n, ratelimit) {
+	if (ratelimit && QS('.dumb_loader_thing') && Date.now() - treectl.busied < 5)
+		return;
+
 	var links = QSA(showfile.active() || treectl.texts ? '#docul li>a' : '#treeul li>a+a');
 	if (!links.length) {
 		treectl.dir_cb = function () {
@@ -4840,8 +6267,6 @@ function tree_neigh(n) {
 		links[act].click();
 	else
 		treectl.treego.call(links[act]);
-
-	links[act].focus();
 }
 
 
@@ -4863,7 +6288,9 @@ function tree_up(justgo) {
 		if (!justgo)
 			return;
 	}
-	act.parentNode.parentNode.parentNode.getElementsByTagName('a')[1].click();
+	var a = act.parentNode.parentNode.parentNode.getElementsByTagName('a')[1];
+	if (a.parentNode.tagName == 'LI')
+		a.click();
 }
 
 
@@ -4876,8 +6303,10 @@ function hkhelp() {
 			try {
 				if (c[a].length != 2)
 					html.push('<tr><th colspan="2">' + esc(c[a]) + '</th></tr>');
-				else
-					html.push('<tr><td>{0}</td><td>{1}</td></tr>'.format(c[a][0], c[a][1]));
+				else {
+					var t1 = c[a][0].replace('⇧', '<b>⇧</b>');
+					html.push('<tr><td>{0}</td><td>{1}</td></tr>'.format(t1, c[a][1]));
+				}
 			}
 			catch (ex) {
 				html.push(">>> " + c[a]);
@@ -4926,29 +6355,67 @@ function fselfunw(e, ae, d, rem) {
 	}
 	selfun();
 }
-document.onkeydown = function (e) {
+var konmai = 0, konmak = (function() {
+	var u = "arrowup",
+		d = "arrowdown",
+		l = "arrowleft",
+		r = "arrowright";
+	return [u, u, d, d, l, r, l, r, "b", "a", "enter"];
+})();
+var ahotkeys = function (e) {
 	if (e.altKey || e.isComposing)
 		return;
 
 	if (QS('#bbox-overlay.visible') || modal.busy)
 		return;
 
-	var k = e.code + '', pos = -1, n,
+	var k = (e.key || e.code) + '', pos = -1, n,
 		ae = document.activeElement,
 		aet = ae && ae != document.body ? ae.nodeName.toLowerCase() : '';
 
-	if (e.key == '?')
-		return hkhelp();
+	if (k.startsWith('Key'))
+		k = k.slice(3);
+	else if (k.startsWith('Digit'))
+		k = k.slice(5);
 
-	if (k == 'Escape') {
+	var kl = k.toLowerCase();
+
+	if (dbg_kbd)
+		console.log('KBD', k, kl, e.key, e.code, e.keyCode, e.which);
+
+	if (konmai < 0)
+		noop();
+	else if (konmak[konmai] != kl)
+		konmai = konmai && kl == konmak[0] ? (konmai<3?konmai:1):0;
+	else if (++konmai >= konmak.length) {
+		konmai = -1;
+		document.documentElement.scrollTop = 0;
+		settheme.go(6);
+		start_actx();
+		sfx_nice();
+		toast.inf(9, 'omega clearance granted', null, 'top');
+		setTimeout(function() {
+			apply_perms(treectl.lsc);
+			fileman.render();
+		}, 573);
+		return ev(e);
+	}
+
+	if (k == 'Escape' || k == 'Esc') {
 		ae && ae.blur();
 		tt.hide();
 
 		if (ebi('hkhelp'))
 			return qsr('#hkhelp');
 
+		if (toast.visible)
+			return toast.hide();
+
 		if (ebi('rn_cancel'))
 			return ebi('rn_cancel').click();
+
+		if (ebi('sh_abrt'))
+			return ebi('sh_abrt').click();
 
 		if (QS('.opview.act'))
 			return QS('#ops>a').click();
@@ -4969,34 +6436,43 @@ document.onkeydown = function (e) {
 			return ebi('griden').click();
 	}
 
-	if (aet == 'tr' && ae.closest('#files')) {
+	var in_ftab = (aet == 'tr' || aet == 'td') && ae.closest('#files');
+	if (in_ftab) {
 		var d = '', rem = 0;
-		if (k == 'ArrowUp') d = 'previous';
-		if (k == 'ArrowDown') d = 'next';
+		if (aet == 'td') ae = ae.closest('tr'); //ie11
+		if (k == 'ArrowUp' || k == 'Up') d = 'previous';
+		if (k == 'ArrowDown' || k == 'Down') d = 'next';
 		if (k == 'PageUp') { d = 'previous'; rem = 0.6; }
 		if (k == 'PageDown') { d = 'next'; rem = 0.6; }
 		if (d) {
 			fselfunw(e, ae, d, rem);
 			return ev(e);
 		}
-		if (k == 'Space') {
+		if (k == 'Space' || k == 'Spacebar' || k == ' ') {
 			clmod(ae, 'sel', 't');
 			msel.origin_tr(ae);
 			msel.selui();
 			return ev(e);
 		}
-		if (k == 'KeyA' && ctrl(e)) {
-			var sel = msel.getsel(),
+	}
+	if (in_ftab || !aet || (ae && ae.closest('#ggrid'))) {
+		if ((kl == 'a') && ctrl(e)) {
+			var ntot = treectl.lsc.files.length + treectl.lsc.dirs.length,
+				sel = msel.getsel(),
 				all = msel.getall();
 
 			msel.evsel(e, sel.length < all.length);
 			msel.origin_id(null);
+			if (ntot > all.length)
+				toast.warn(10, L.f_anota.format(all.length, ntot), L.f_anota);
+			else if (toast.tag == L.f_anota)
+				toast.hide();
 			return ev(e);
 		}
 	}
 
 	if (ae && ae.closest('pre')) {
-		if (k == 'KeyA' && ctrl(e)) {
+		if ((kl == 'a') && ctrl(e)) {
 			var sel = document.getSelection(),
 				ran = document.createRange();
 
@@ -5010,101 +6486,115 @@ document.onkeydown = function (e) {
 	if (k.endsWith('Enter') && ae && (ae.onclick || ae.hasAttribute('tabIndex')))
 		return ev(e) && ae.click() || true;
 
-	if (aet && aet != 'a' && aet != 'tr' && aet != 'pre')
+	if (aet && aet != 'a' && aet != 'tr' && aet != 'td' && aet != 'div' && aet != 'pre')
 		return;
 
-	if (ctrl(e)) {
-		if (k == 'KeyX')
-			return fileman.cut();
+	if (k == '?')
+		return hkhelp();
 
-		if (k == 'KeyV')
-			return fileman.paste();
+	if (!e.shiftKey && ctrl(e)) {
+		var sel = window.getSelection && window.getSelection() || {};
+		sel = sel && !sel.isCollapsed && sel.direction != 'none';
 
-		if (k == 'KeyK')
-			return fileman.delete();
+		if (kl == 'x')
+			return fileman.cut(e);
+
+		if (kl == 'c' && !sel)
+			return fileman.cpy(e);
+
+		if (kl == 'v')
+			return fileman.d_paste(e);
+
+		if (kl == 'k')
+			return fileman.delete(e);
 
 		return;
 	}
 
-	if (e.shiftKey && k != 'KeyA' && k != 'KeyD')
+	if (e.shiftKey && kl != 'a' && kl != 'd')
 		return;
 
-	if (k.indexOf('Digit') === 0)
-		pos = parseInt(k.slice(-1)) * 0.1;
+	if (/^[0-9]$/.test(k))
+		pos = parseInt(k) * 0.1;
 
 	if (pos !== -1)
 		return seek_au_mul(pos) || true;
 
-	if (k == 'KeyJ')
+	if (kl == 'j')
 		return prev_song() || true;
 
-	if (k == 'KeyL')
+	if (kl == 'l')
 		return next_song() || true;
 
-	if (k == 'KeyP')
+	if (kl == 'p')
 		return playpause() || true;
 
-	n = k == 'KeyU' ? -10 : k == 'KeyO' ? 10 : 0;
+	n = kl == 'u' ? -10 : kl == 'o' ? 10 : 0;
 	if (n !== 0)
 		return seek_au_rel(n) || true;
 
-	if (k == 'KeyY')
+	if (kl == 'y')
 		return msel.getsel().length ? ebi('seldl').click() :
 			showfile.active() ? ebi('dldoc').click() :
 				dl_song();
 
-	n = k == 'KeyI' ? -1 : k == 'KeyK' ? 1 : 0;
+	n = kl == 'i' ? -1 : kl == 'k' ? 1 : 0;
 	if (n !== 0)
-		return tree_neigh(n);
+		return tree_neigh(n, 1);
 
-	if (k == 'KeyM')
+	if (kl == 'm')
 		return tree_up();
 
-	if (k == 'KeyB')
+	if (kl == 'b')
 		return treectl.hidden ? treectl.entree() : treectl.detree();
 
-	if (k == 'KeyG')
+	if (kl == 'g')
 		return ebi('griden').click();
 
-	if (k == 'KeyT')
+	if (kl == 't')
 		return ebi('thumbs').click();
 
-	if (k == 'KeyV')
+	if (kl == 'v')
 		return ebi('filetree').click();
 
 	if (k == 'F2')
 		return fileman.rename();
 
 	if (!treectl.hidden && (!e.shiftKey || !thegrid.en)) {
-		if (k == 'KeyA')
+		if (kl == 'a')
 			return QS('#twig').click();
 
-		if (k == 'KeyD')
+		if (kl == 'd')
 			return QS('#twobytwo').click();
 	}
 
 	if (showfile.active()) {
-		if (k == 'KeyS')
+		if (kl == 's')
 			showfile.tglsel();
-		if (k == 'KeyE' && ebi('editdoc').style.display != 'none')
+		if (kl == 'e' && ebi('editdoc').style.display != 'none')
 			ebi('editdoc').click();
 	}
 
+	if (mp && mp.au && !mp.au.paused) {
+		if (kl == 's')
+			return sel_song();
+	}
+
 	if (thegrid.en) {
-		if (k == 'KeyS')
+		if (kl == 's')
 			return ebi('gridsel').click();
 
-		if (k == 'KeyA')
+		if (kl == 'a')
 			return QSA('#ghead a[z]')[0].click();
 
-		if (k == 'KeyD')
+		if (kl == 'd')
 			return QSA('#ghead a[z]')[1].click();
 	}
 };
 
 
 // search
-(function () {
+var search_ui = (function () {
 	var sconf = [
 		[
 			L.s_sz,
@@ -5139,7 +6629,8 @@ document.onkeydown = function (e) {
 		]
 	];
 
-	var trs = [],
+	var r = {},
+		trs = [],
 		orig_url = null,
 		orig_html = null,
 		cap = 125;
@@ -5186,9 +6677,11 @@ document.onkeydown = function (e) {
 
 	function ev_search_input() {
 		var v = unsmart(this.value),
-			id = this.getAttribute('id');
+			id = this.getAttribute('id'),
+			is_txt = id.slice(-1) == 'v',
+			is_chk = id.slice(-1) == 'c';
 
-		if (id.slice(-1) == 'v') {
+		if (is_txt) {
 			var chk = ebi(id.slice(0, -1) + 'c');
 			chk.checked = ((v + '').length > 0);
 		}
@@ -5200,12 +6693,15 @@ document.onkeydown = function (e) {
 		cap = 125;
 
 		clearTimeout(defer_timeout);
+		if (is_chk)
+			return do_search();
+
 		defer_timeout = setTimeout(try_search, 2000);
 		try_search(v);
 	}
 
 	function ev_search_keydown(e) {
-		if (e.key.endsWith('Enter'))
+		if ((e.key + '').endsWith('Enter'))
 			do_search();
 	}
 
@@ -5319,7 +6815,7 @@ document.onkeydown = function (e) {
 
 	function do_search() {
 		search_in_progress = Date.now();
-		srch_msg(false, "searching...");
+		srch_msg(false, L.sm_w8);
 		clearTimeout(search_timeout);
 
 		var xhr = new XHR();
@@ -5333,7 +6829,7 @@ document.onkeydown = function (e) {
 
 	function xhr_search_results() {
 		if (this.status !== 200) {
-			var msg = unpre(this.responseText);
+			var msg = hunpre(this.responseText);
 			srch_msg(true, "http " + this.status + ": " + msg);
 			search_in_progress = 0;
 			return;
@@ -5341,13 +6837,19 @@ document.onkeydown = function (e) {
 		search_in_progress = 0;
 		srch_msg(false, '');
 
-		var res = JSON.parse(this.responseText),
-			tagord = res.tag_order;
+		var res = JSON.parse(this.responseText);
+		r.render(res, this, true);
+	}
 
-		sortfiles(res.hits);
+	r.render = function (res, xhr, sort) {
+		var tagord = res.tag_order;
+
+		srch_msg(false, '');
+		if (sort)
+			sortfiles(res.hits);
 
 		var ofiles = ebi('files');
-		if (ofiles.getAttribute('ts') > this.ts)
+		if (xhr && ofiles.getAttribute('ts') > xhr.ts)
 			return;
 
 		treectl.hide();
@@ -5360,7 +6862,8 @@ document.onkeydown = function (e) {
 		for (var a = 0; a < res.hits.length; a++) {
 			var r = res.hits[a],
 				ts = parseInt(r.ts),
-				sz = esc(r.sz + ''),
+				sz = parseInt(r.sz),
+				hsz = filesizefun(sz),
 				rp = esc(uricom_dec(r.rp + '')),
 				ext = rp.lastIndexOf('.') > 0 ? rp.split('.').pop().split('?')[0] : '%',
 				id = 'f-' + ('00000000' + crc32(rp)).slice(-8);
@@ -5373,10 +6876,11 @@ document.onkeydown = function (e) {
 				ext = '%';
 
 			var links = linksplit(r.rp + '', id).join('<span>/</span>'),
-				nodes = ['<tr><td>-</td><td><div>' + links + '</div>', sz];
+				nodes = ['<tr><td>-</td><td><div>' + links +
+					'</div></td><td sortv="' + sz + '">' + hsz];
 
 			for (var b = 0; b < tagord.length; b++) {
-				var k = tagord[b],
+				var k = esc(tagord[b]),
 					v = r.tags[k] || "";
 
 				if (k == ".dur") {
@@ -5385,10 +6889,10 @@ document.onkeydown = function (e) {
 					continue;
 				}
 
-				nodes.push(v);
+				nodes.push(esc('' + v));
 			}
 
-			nodes = nodes.concat([ext, unix2iso(ts)]);
+			nodes = nodes.concat([ext, unix2ui(ts)]);
 			html.push(nodes.join('</td><td>'));
 			html.push('</td></tr>');
 		}
@@ -5399,19 +6903,21 @@ document.onkeydown = function (e) {
 		}
 
 		ofiles = set_files_html(html.join('\n'));
-		ofiles.setAttribute("ts", this.ts);
-		ofiles.setAttribute("q_raw", this.q_raw);
+		ofiles.setAttribute("ts", xhr ? xhr.ts : 1);
+		ofiles.setAttribute("q_raw", xhr ? xhr.q_raw : 'playlist');
 		set_vq();
 		mukey.render();
 		reload_browser();
 		filecols.set_style(['File Name']);
 
-		sethash('q=' + uricom_enc(this.q_raw));
+		if (xhr)
+			sethash('q=' + uricom_enc(xhr.q_raw));
+
 		ebi('unsearch').onclick = unsearch;
 		var m = ebi('moar');
 		if (m)
 			m.onclick = moar;
-	}
+	};
 
 	function unsearch(e) {
 		ev(e);
@@ -5428,30 +6934,126 @@ document.onkeydown = function (e) {
 		cap *= 2;
 		do_search();
 	}
+
+	return r;
 })();
+
+
+function ev_load_m3u(e) {
+	ev(e);
+	var id = this.getAttribute('id').slice(1),
+		url = ebi(id).getAttribute('href').split('?')[0];
+
+	modal.confirm(L.mm_m3u,
+		function () { load_m3u(url); },
+		function () {
+			if (has(perms, 'write') && has(perms, 'delete'))
+				location = url + '?edit';
+			else
+				showfile.show(url);
+		}
+	);
+	return false;
+}
+function load_m3u(url) {
+	assert_vp(url);
+	var xhr = new XHR();
+	xhr.open('GET', url, true);
+	xhr.onload = render_m3u;
+	xhr.url = url;
+	xhr.send();
+	return false;
+}
+function render_m3u() {
+	if (!xhrchk(this, L.tv_xe1, L.tv_xe2))
+		return;
+
+	var evp = get_evpath(),
+		m3u = this.responseText,
+		xtd = m3u.slice(0, 12).indexOf('#EXTM3U') + 1,
+		lines = m3u.replace(/\r/g, '\n').split('\n'),
+		dur = 1,
+		artist = '',
+		title = '',
+		ret = {'hits': [], 'tag_order': ['artist', 'title', '.dur'], 'trunc': false};
+
+	for (var a = 0; a < lines.length; a++) {
+		var ln = lines[a].trim();
+		if (xtd && ln.startsWith('#')) {
+			var m = /^#EXTINF:([0-9]+)[, ](.*)/.exec(ln);
+			if (m) {
+				dur = m[1];
+				title = m[2];
+				var ofs = title.indexOf(' - ');
+				if (ofs > 0) {
+					artist = title.slice(0, ofs);
+					title = title.slice(ofs + 3);
+				}
+			}
+			continue;
+		}
+		if (ln.indexOf('.') < 0)
+			continue;
+
+		var n = ret.hits.length + 1,
+			url = ln;
+
+		if (url.indexOf(':\\'))  // C:\
+			url = url.split(/\\/g).pop();
+
+		url = url.replace(/\\/g, '/');
+		url = uricom_enc(url).replace(/%2f/gi, '/')
+
+		if (!url.startsWith('/'))
+			url = vjoin(evp, url);
+
+		ret.hits.push({
+			"ts": 946684800 + n,
+			"sz": 100000 + n,
+			"rp": url,
+			"tags": {".dur": dur, "artist": artist, "title": title}
+		});
+		dur = 1;
+		artist = title = '';
+	}
+
+	search_ui.render(ret, null, false);
+	sethash('m3u=' + this.url.split('?')[0].split('/').pop());
+	goto();
+
+	var el = QS('#files>tbody>tr.au>td>a.play');
+	if (el)
+		el.click();
+}
 
 
 function aligngriditems() {
 	if (!treectl)
 		return;
 
-	var em2px = parseFloat(getComputedStyle(ebi('ggrid')).fontSize);
-	var gridsz = 10;
+	var ggrid = ebi('ggrid'),
+		em2px = parseFloat(getComputedStyle(ggrid).fontSize),
+		gridsz = 10;
 	try {
 		gridsz = cprop('--grid-sz').slice(0, -2);
 	}
 	catch (ex) { }
-	var gridwidth = ebi('ggrid').clientWidth;
-	var griditemcount = ebi('ggrid').children.length;
-	var totalgapwidth = em2px * griditemcount;
+	var gridwidth = ggrid.clientWidth,
+		griditemcount = ggrid.children.length,
+		totalgapwidth = em2px * griditemcount;
+
 	if (/b/.test(themen + ''))
 		totalgapwidth *= 2.8;
 
+	var val, st = ggrid.style;
+
 	if (((griditemcount * em2px) * gridsz) + totalgapwidth < gridwidth) {
-		ebi('ggrid').style.justifyContent = 'left';
+		val = 'left';
 	} else {
-		ebi('ggrid').style.justifyContent = treectl.hidden ? 'center' : 'space-between';
+		val = treectl.hidden ? 'center' : 'space-between';
 	}
+	if (st.justifyContent != val)
+		st.justifyContent = val;
 }
 onresize100.add(aligngriditems);
 
@@ -5467,10 +7069,7 @@ var filecolwidth = (function () {
 			return;
 
 		lastwidth = w;
-		try {
-			document.documentElement.style.setProperty('--file-td-w', w + 'em');
-		}
-		catch (ex) { }
+		setcvar('--file-td-w', w + 'em');
 	}
 })();
 onresize100.add(filecolwidth, true);
@@ -5491,19 +7090,24 @@ var treectl = (function () {
 		mentered = null,
 		treesz = clamp(icfg_get('treesz', 16), 10, 50);
 
+	var resort = function () {
+		ENATSORT = NATSORT && clgot(ebi('nsort'), 'on');
+		treectl.gentab(get_evpath(), treectl.lsc);
+	};
 	bcfg_bind(r, 'ireadme', 'ireadme', true);
 	bcfg_bind(r, 'idxh', 'idxh', idxh, setidxh);
 	bcfg_bind(r, 'dyn', 'dyntree', true, onresize);
-	bcfg_bind(r, 'csel', 'csel', false);
-	bcfg_bind(r, 'dots', 'dotfiles', false, function (v) {
+	bcfg_bind(r, 'csel', 'csel', dgsel);
+	bcfg_bind(r, 'dots', 'dotfiles', see_dots, function (v) {
 		r.goto();
-		var xhr = new XHR();
-		xhr.open('GET', SR + '/?setck=dots=' + (v ? 'y' : ''), true);
-		xhr.send();
+		setck('dots=' + (v ? 'y' : ''));
 	});
-	bcfg_bind(r, 'dir1st', 'dir1st', true, function (v) {
-		treectl.gentab(get_evpath(), treectl.lsc);
+	bcfg_bind(r, 'utctid', 'utctid', dutc, function (v) {
+		window.unix2ui = v ? unix2iso : unix2iso_localtime;
+		resort();
 	});
+	bcfg_bind(r, 'nsort', 'nsort', dnsort, resort);
+	bcfg_bind(r, 'dir1st', 'dir1st', true, resort);
 	setwrap(bcfg_bind(r, 'wtree', 'wraptree', true, setwrap));
 	setwrap(bcfg_bind(r, 'parpane', 'parpane', true, onscroll));
 	bcfg_bind(r, 'htree', 'hovertree', false, reload_tree);
@@ -5515,6 +7119,14 @@ var treectl = (function () {
 	};
 	r.nvis = r.lim;
 
+	ldks = jread('dks', []);
+	for (var a = ldks.length - 1; a >= 0; a--) {
+		var s = ldks[a],
+			o = s.lastIndexOf('?');
+
+		dks[s.slice(0, o)] = s.slice(o + 1);
+	}
+
 	function setwrap(v) {
 		clmod(ebi('tree'), 'nowrap', !v);
 		reload_tree();
@@ -5525,9 +7137,7 @@ var treectl = (function () {
 		if (!v == !/\bidxh=y\b/.exec('' + document.cookie))
 			return;
 
-		var xhr = new XHR();
-		xhr.open('GET', SR + '/?setck=idxh=' + (v ? 'y' : 'n'), true);
-		xhr.send();
+		setck('idxh=' + (v ? 'y' : 'n'));
 	}
 	setidxh(r.idxh);
 
@@ -5544,7 +7154,7 @@ var treectl = (function () {
 	r.show = function () {
 		r.hidden = false;
 		if (!entreed) {
-			ebi('path').style.display = 'inline-block';
+			ebi('path').style.display = nonav ? 'none' : 'inline-block';
 			return;
 		}
 
@@ -5562,8 +7172,9 @@ var treectl = (function () {
 		swrite('entreed', 'na');
 
 		r.hide();
-		ebi('path').style.display = '';
-	}
+		if (!nonav)
+			ebi('path').style.display = '';
+	};
 
 	r.hide = function () {
 		r.hidden = true;
@@ -5573,7 +7184,7 @@ var treectl = (function () {
 		window.removeEventListener('resize', onresize);
 		window.removeEventListener('scroll', onscroll);
 		aligngriditems();
-	}
+	};
 
 	function unmenter() {
 		if (mentered) {
@@ -5704,10 +7315,7 @@ var treectl = (function () {
 			w = iw + 'em',
 			w2 = (iw + 2) + 'em';
 
-		try {
-			document.documentElement.style.setProperty('--nav-sz', w);
-		}
-		catch (ex) { }
+		setcvar('--nav-sz', w);
 		ebi('tree').style.width = w;
 		ebi('wrap').style.marginLeft = w2;
 		onscroll();
@@ -5729,18 +7337,21 @@ var treectl = (function () {
 	};
 
 	function get_tree(top, dst, rst) {
-		var xhr = new XHR();
+		var xhr = new XHR(),
+			m = /[?&](k=[^&#]+)/.exec(dst),
+			k = m ? '&' + m[1] : dk ? '&k=' + dk : '';
+
 		xhr.top = top;
 		xhr.dst = dst;
 		xhr.rst = rst;
-		xhr.ts = Date.now();
-		xhr.open('GET', dst + '?tree=' + top + (r.dots ? '&dots' : ''), true);
-		xhr.onload = xhr.onerror = recvtree;
+		xhr.ts = r.busied = Date.now();
+		xhr.open('GET', addq(dst, 'tree=' + top + (r.dots ? '&dots' : '') + k), true);
+		xhr.onload = xhr.onerror = r.recvtree;
 		xhr.send();
-		enspin('#tree');
+		enspin('t');
 	}
 
-	function recvtree() {
+	r.recvtree = function () {
 		if (!xhrchk(this, L.tl_xe1, L.tl_xe2))
 			return;
 
@@ -5748,12 +7359,23 @@ var treectl = (function () {
 			var res = JSON.parse(this.responseText);
 		}
 		catch (ex) {
-			return;
+			return toast.err(30, "bad <code>?tree</code> reply;\nexpected json, got this:\n\n" + esc(this.responseText + ''));
 		}
-		rendertree(res, this.ts, this.top, this.dst, this.rst);
-	}
+		r.rendertree(res, this.ts, this.top, this.dst, this.rst);
 
-	function rendertree(res, ts, top0, dst, rst) {
+		if (r.lsc && r.lsc.unlist)
+			r.prunetree(r.lsc);
+	};
+
+	r.prunetree = function (res) {
+		var ptn = new RegExp(res.unlist);
+		var els = QSA('#treeul li>a+a');
+		for (var a = els.length - 1; a >= 0; a--)
+			if (ptn.exec(els[a].textContent) && !els[a].className)
+				els[a].closest('ul').removeChild(els[a].closest('li'));
+	};
+
+	r.rendertree = function (res, ts, top0, dst, rst) {
 		var cur = ebi('treeul').getAttribute('ts');
 		if (cur && parseInt(cur) > ts + 20 && QS('#treeul>li>a+a')) {
 			console.log("reject tree; " + cur + " / " + (ts - cur));
@@ -5761,13 +7383,22 @@ var treectl = (function () {
 		}
 		ebi('treeul').setAttribute('ts', ts);
 
-		var top = top0 == '.' ? dst : top0,
+		if (SR && !top0) {
+			var x = SR.slice(1).split('/');
+			while (x[0]) {
+				res = res['k' + x.shift()];
+				if (!res)
+					throw 'invalid --rp-loc (or bug?)';
+			}
+		}
+
+		var top = (top0 == '.' ? dst : top0).split('?')[0],
 			name = uricom_dec(top.split('/').slice(-2)[0]),
 			rtop = top.replace(/^\/+/, ""),
-			html = parsetree(res, rtop);
+			html = parsetree(res, rtop.slice(SR.length));
 
 		if (!top0) {
-			html = '<li><a href="#">-</a><a href="/">[root]</a>\n<ul>' + html;
+			html = '<li><a href="#">-</a><a href="' + SR + '/">[root]</a>\n<ul>' + html;
 			if (rst || !ebi('treeul').getElementsByTagName('li').length)
 				ebi('treeul').innerHTML = html + '</ul></li>';
 		}
@@ -5778,14 +7409,14 @@ var treectl = (function () {
 
 			var links = QSA('#treeul a+a');
 			for (var a = 0, aa = links.length; a < aa; a++) {
-				if (links[a].getAttribute('href') == top) {
+				if (links[a].getAttribute('href').split('?')[0] == top) {
 					var o = links[a].parentNode;
 					if (!o.getElementsByTagName('li').length)
 						o.innerHTML = html;
 				}
 			}
 		}
-		despin('#tree');
+		qsr('#dlt_t');
 
 		try {
 			QS('#treeul>li>a+a').textContent = '[root]';
@@ -5807,17 +7438,23 @@ var treectl = (function () {
 				console.log("dir_cb failed", ex);
 			}
 		}
-	}
+	};
 
 	function reload_tree() {
-		var cdir = r.nextdir || get_vpath(),
+		var cevp = get_evpath(),
+			cdir = r.nextdir || uricom_dec(cevp),
 			links = QSA('#treeul a+a'),
 			nowrap = QS('#tree.nowrap') && QS('#hovertree.on'),
 			act = null;
 
 		for (var a = 0, aa = links.length; a < aa; a++) {
-			var href = uricom_dec(links[a].getAttribute('href')),
+			var qhref = links[a].getAttribute('href'),
+				ehref = qhref.split('?')[0],
+				href = uricom_dec(ehref),
 				cl = '';
+
+			if (dk && ehref == cevp && !/[?&]k=/.exec(qhref))
+				links[a].setAttribute('href', addq(qhref, 'k=' + dk));
 
 			if (href == cdir) {
 				act = links[a];
@@ -5879,6 +7516,9 @@ var treectl = (function () {
 	}
 
 	function bad_proxy(e) {
+		if (ctrl(e))
+			return true;
+
 		ev(e);
 		var dst = this.getAttribute('dst'),
 			k = dst ? 'dst' : 'href',
@@ -5901,30 +7541,40 @@ var treectl = (function () {
 			return;
 		}
 		var href = this.getAttribute('href');
-		if (R && !href.startsWith(SR)) {
-			location = href;
-			return;
-		}
 		r.reqls(href, true);
 		r.dir_cb = tree_scrollto;
 		thegrid.setvis(true);
+		clmod(this, 'ld', 1);
 	}
 
-	r.reqls = function (url, hpush, back) {
-		var xhr = new XHR();
+	r.reqls = function (url, hpush, back, hydrate) {
+		if (IE && !history.pushState)
+			return location = url;
+
+		var xhr = new XHR(),
+			m = /[?&](k=[^&#]+)/.exec(url),
+			k = m ? '&' + m[1] : dk ? '&k=' + dk : '',
+			uq = (r.dots ? '&dots' : '') + k;
+
+		if (rtt !== null)
+			uq += '&rtt=' + rtt;
+
 		xhr.top = url.split('?')[0];
 		xhr.back = back
 		xhr.hpush = hpush;
-		xhr.ts = Date.now();
-		xhr.open('GET', xhr.top + '?ls' + (r.dots ? '&dots' : ''), true);
+		xhr.hydrate = hydrate;
+		xhr.ts = r.busied = Date.now();
+		xhr.open('GET', xhr.top + '?ls' + uq, true);
+		xhr.setRequestHeader('Fnugg', '' + xhr.ts);
 		xhr.onload = xhr.onerror = recvls;
 		xhr.send();
 
 		r.nvis = r.lim;
 		r.sb_msg = false;
 		r.nextdir = xhr.top;
-		enspin('#tree');
-		enspin(thegrid.en ? '#gfiles' : '#files');
+		clearTimeout(mpl.t_eplay);
+		enspin('t');
+		enspin('f');
 		window.removeEventListener('scroll', r.tscroll);
 	}
 
@@ -5947,69 +7597,116 @@ var treectl = (function () {
 		if (!xhrchk(this, L.fl_xe1, L.fl_xe2))
 			return;
 
+		rtt = Date.now() - this.ts;
+
 		r.nextdir = null;
 		var cdir = get_evpath(),
-			cur = ebi('files').getAttribute('ts');
+			lfiles = ebi('files'),
+			cur = lfiles.getAttribute('ts');
 
 		if (cur && parseInt(cur) > this.ts) {
 			console.log("reject ls");
 			return;
 		}
-		ebi('files').setAttribute('ts', this.ts);
+		lfiles.setAttribute('ts', this.ts);
 
 		try {
 			var res = JSON.parse(this.responseText);
+			Object.assign(res, res.cfg);
+			res.cfg.k;
 		}
 		catch (ex) {
-			location = this.top;
-			return;
+			if (r.ls_cb) {
+				r.ls_cb = null;
+				return toast.inf(10, L.mm_nof);
+			}
+
+			if (!this.hydrate) {
+				location = this.top;
+				return;
+			}
+
+			return toast.err(30, "bad <code>?ls</code> reply;\nexpected json, got this:\n\n" + esc(this.responseText + ''));
 		}
 
 		if (r.chk_index_html(this.top, res))
 			return;
 
+		if (this.ts != res.fnugg && res.fnugg != 'nei' && sread('no_fnugg') !== '1')
+			toast.warn(60, "WARNING: A proxy/CDN between your webbrowser and the server is misbehaving, and caching responses it shouldn't. As a result, you are now seeing stale directory listings. There will be many issues.\n\nIf you need to ignore this and stop these messages, you can set the global-option 'no-fnugg' on the server, or click <code>π</code> and run this: <code>STG.no_fnugg=1</code>");
+
 		for (var a = 0; a < res.files.length; a++)
 			if (res.files[a].tags === undefined)
 				res.files[a].tags = {};
 
+		dnsort = res.dnsort;
 		read_dsort(res.dsort);
-		dfull = res.dfull;
+		dcrop = res.dcrop;
+		dth3x = res.dth3x;
+		dk = res.dk;
 
 		srvinf = res.srvinf;
-		try {
-			ebi('srv_info').innerHTML = ebi('srv_info2').innerHTML = '<span>' + res.srvinf + '</span>';
+		if (rtt !== null)
+			srvinf += (srvinf ? '</span> // <span>rtt: ' : 'rtt: ') + rtt;
+
+		var o = ebi('srv_info2');
+		if (o)
+			o.innerHTML = ebi('srv_info').innerHTML = '<span>' + srvinf + '</span>';
+
+		if (res.ufavico && (!favico.en || !ebi('icot').value)) {
+			while (qsr('head>link[rel~="icon"]')) { }
+			document.head.insertAdjacentHTML('beforeend', res.ufavico);
 		}
-		catch (ex) { }
 
 		if (this.hpush && !showfile.active())
-			hist_push(this.top);
+			hist_push(this.top + (dk ? '?k=' + dk : ''));
 
 		if (!this.back) {
 			var dirs = [];
-			for (var a = 0; a < res.dirs.length; a++)
-				dirs.push(res.dirs[a].href.split('/')[0].split('?')[0]);
+			for (var a = 0; a < res.dirs.length; a++) {
+				var dh = res.dirs[a].href,
+					dn = dh.split('/')[0].split('?')[0],
+					m = /[?&](k=[^&#]+)/.exec(dh);
 
-			rendertree({ "a": dirs }, this.ts, ".", get_evpath());
+				if (m)
+					dn += '?' + m[1];
+
+				dirs.push(dn);
+			}
+
+			r.rendertree({ "a": dirs }, this.ts, ".", get_evpath() + (dk ? '?k=' + dk : ''));
+			if (res.unlist)
+				r.prunetree(res);
 		}
 
 		r.gentab(this.top, res);
-		despin('#tree');
-		despin('#files');
-		despin('#gfiles');
+		qsr('#dlt_t');
+		qsr('#dlt_f');
 
 		var lg0 = res.logues ? res.logues[0] || "" : "",
 			lg1 = res.logues ? res.logues[1] || "" : "",
+			mds = res.readmes && treectl.ireadme,
+			md0 = mds ? res.readmes[0] || "" : "",
+			md1 = mds ? res.readmes[1] || "" : "",
 			dirchg = get_evpath() != cdir;
 
-		sandbox(ebi('pro'), sb_lg, '', lg0);
-		if (dirchg)
-			sandbox(ebi('epi'), sb_lg, '', lg1);
+		if (lg1 === Ls.eng.f_empty)
+			lg1 = L.f_empty;
 
+		sandbox(ebi('pro'), sb_lg, sba_lg,'', lg0);
+		if (dirchg)
+			sandbox(ebi('epi'), sb_lg, sba_lg, '', lg1);
+
+		clmod(ebi('pro'), 'mdo');
 		clmod(ebi('epi'), 'mdo');
-		if (res.readme && treectl.ireadme)
-			show_readme(res.readme);
+
+		if (md0)
+			show_readme(md0, 0);
+
+		if (md1)
+			show_readme(md1, 1);
 		else if (!dirchg)
-			sandbox(ebi('epi'), sb_lg, '', lg1);
+			sandbox(ebi('epi'), sb_lg, sba_lg, '', lg1);
 
 		if (this.hpush && !this.back) {
 			var ofs = ebi('wrap').offsetTop;
@@ -6023,6 +7720,9 @@ var treectl = (function () {
 			r.ls_cb = null;
 			fun();
 		}
+
+		if (can_shr && in_shr && QS('#op_unpost.act'))
+			goto('unpost');
 	}
 
 	r.chk_index_html = function (top, res) {
@@ -6037,23 +7737,30 @@ var treectl = (function () {
 	};
 
 	r.gentab = function (top, res) {
+		showfile.untail();
 		var nodes = res.dirs.concat(res.files),
 			html = mk_files_header(res.taglist),
-			sel = r.lsc === res ? msel.getsel() : [],
+			sel = msel.hist[top],
 			ae = document.activeElement,
 			cid = null,
 			plain = [],
 			seen = {};
 
+		in_shr = have_shr && top.startsWith(SR + have_shr);
+
 		if (ae && /^tr$/i.exec(ae.nodeName))
 			if (ae = ae.querySelector('a[id]'))
 				cid = ae.getAttribute('id');
+
+		var m = /[?&]k=([^&]+)/.exec(location.search);
+		if (m)
+			memo_dk(top, m[1]);
 
 		r.lsc = res;
 		if (res.unlist) {
 			var ptn = new RegExp(res.unlist);
 			for (var a = nodes.length - 1; a >= 0; a--)
-				if (ptn.exec(nodes[a].href.split('?')[0]))
+				if (ptn.exec(uricom_dec(nodes[a].href.split('?')[0])))
 					nodes.splice(a, 1);
 		}
 		nodes = sortfiles(nodes);
@@ -6090,33 +7797,35 @@ var treectl = (function () {
 			if (lang) {
 				showfile.files.push({ 'id': id, 'name': fname });
 				if (lang == 'md')
-					tn.href += tn.href.indexOf('?') < 0 ? '?v' : '&v';
+					tn.href = addq(tn.href, 'v');
 			}
 
 			if (tn.lead == '-')
 				tn.lead = '<a href="?doc=' + bhref + '" id="t' + id +
-					'" class="doc' + (lang ? ' bri' : '') +
+					'" rel="nofollow" class="doc' + (lang ? ' bri' : '') +
 					'" hl="' + id + '" name="' + hname + '">-txt-</a>';
 
-			var ln = ['<tr><td>' + tn.lead + '</td><td><a href="' +
-				top + tn.href + '" id="' + id + '">' + hname + '</a>', tn.sz];
+			var cl = /\.PARTIAL$/.exec(fname) ? ' class="fade"' : '',
+				ln = ['<tr' + cl + '><td>' + tn.lead + '</td><td><a href="' +
+					top + tn.href + '" id="' + id + '">' + hname +
+					'</a></td><td sortv="' + tn.sz + '">' + filesizefun(tn.sz)];
 
 			for (var b = 0; b < res.taglist.length; b++) {
-				var k = res.taglist[b],
+				var k = esc(res.taglist[b]),
 					v = (tn.tags || {})[k] || "",
 					sv = null;
 
 				if (k == ".dur")
 					sv = v ? s2ms(v) : "";
 				else if (k == ".up_at")
-					sv = v ? unix2iso(v) : "";
+					sv = v ? unix2ui(v) : "";
 				else {
-					ln.push(v);
+					ln.push(esc('' + v));
 					continue;
 				}
 				ln[ln.length - 1] += '</td><td sortv="' + v + '">' + sv;
 			}
-			ln = ln.concat([tn.ext, unix2iso(tn.ts)]).join('</td><td>');
+			ln = ln.concat([tn.ext, unix2ui(tn.ts)]).join('</td><td>');
 			html.push(ln + '</td></tr>');
 		}
 		html.push('</tbody>');
@@ -6145,10 +7854,7 @@ var treectl = (function () {
 				apply_perms(res);
 				fileman.render();
 			}
-			if (sel.length)
-				msel.loadsel(sel);
-			else
-				msel.origin_id(null);
+			msel.loadsel(top, sel);
 
 			if (cid) try {
 				ebi(cid).closest('tr').focus();
@@ -6166,7 +7872,7 @@ var treectl = (function () {
 				url = url.href;
 				var mt = m[0] == 'a' ? 'audio' : /\.(webm|mkv)($|\?)/i.exec(url) ? 'video' : 'image'
 				if (mt == 'image') {
-					url += url.indexOf('?') < 0 ? '?cache' : '&cache';
+					url = addq(url, 'cache');
 					console.log(url);
 					new Image().src = url;
 				}
@@ -6178,14 +7884,14 @@ var treectl = (function () {
 
 	r.hydrate = function () {
 		qsr('#bbsw');
+		srvinf = ebi('srv_info').innerHTML.slice(6, -7);
 		if (ls0 === null) {
-			var xhr = new XHR();
-			xhr.open('GET', SR + '/?setck=js=y', true);
-			xhr.send();
-
+			setck('js=y');
 			r.ls_cb = showfile.addlinks;
-			return r.reqls(get_evpath(), false);
+			return r.reqls(get_evpath(), false, undefined, true);
 		}
+		ls0.unlist = unlist0;
+		ls0.u2ts = u2ts;
 
 		var top = get_evpath();
 		if (r.chk_index_html(top, ls0))
@@ -6197,6 +7903,30 @@ var treectl = (function () {
 		showfile.addlinks();
 		setTimeout(eval_hash, 1);
 	};
+
+	function memo_dk(vp, k) {
+		dks[vp] = k;
+		var lv = vp + "?" + k;
+		if (has(ldks, lv))
+			return;
+
+		ldks.unshift(lv);
+		if (ldks.length > 32) {
+			var keep = [], evp = get_evpath();
+			for (var a = 0; a < ldks.length; a++) {
+				var s = ldks[a];
+				if (evp.startsWith(s.replace(/\?[^?]+$/, '')))
+					keep.push(s);
+			}
+			var lim = 32 - keep.length;
+			for (var a = 0; a < lim; a++) {
+				if (!has(keep, ldks[a]))
+					keep.push(ldks[a])
+			}
+			ldks = keep;
+		}
+		jwrite('dks', ldks);
+	}
 
 	r.setlazy = function (plain) {
 		var html = ['<div id="plazy">', esc(plain.join(' ')), '</div>'],
@@ -6230,7 +7960,7 @@ var treectl = (function () {
 		document.documentElement.scrollLeft = 0;
 		setTimeout(function () {
 			r.gentab(get_evpath(), r.lsc);
-			ebi('wrap').style.opacity = 'unset';
+			ebi('wrap').style.opacity = CLOSEST ? 'unset' : 1;
 		}, 1);
 	};
 
@@ -6266,10 +7996,19 @@ var treectl = (function () {
 		}
 		delete res['a'];
 		var keys = Object.keys(res);
-		keys.sort(function (a, b) { return a.localeCompare(b); });
+		for (var a = 0; a < keys.length; a++)
+			keys[a] = [uricom_dec(keys[a]), keys[a]];
+
+		if (ENATSORT)
+			keys.sort(function (a, b) { return NATSORT.compare(a[0], b[0]); });
+		else
+			keys.sort(function (a, b) { return a[0].localeCompare(b[0]); });
+
 		for (var a = 0; a < keys.length; a++) {
-			var kk = keys[a],
-				ks = kk.slice(1),
+			var kk = keys[a][1],
+				m = /(\?k=[^\n]+)/.exec(kk),
+				kdk = m ? m[1] : '',
+				ks = kk.replace(kdk, '').slice(1),
 				ded = ks.endsWith('\n'),
 				k = uricom_sdec(ded ? ks.replace(/\n$/, '') : ks),
 				hek = esc(k[0]),
@@ -6277,7 +8016,7 @@ var treectl = (function () {
 				url = '/' + (top ? top + uek : uek) + '/',
 				sym = res[kk] ? '-' : '+',
 				link = '<a href="#">' + sym + '</a><a href="' +
-					url + '">' + hek + '</a>';
+					SR + url + kdk + '">' + hek + '</a>';
 
 			if (res[kk]) {
 				var subtree = parsetree(res[kk], url.slice(1));
@@ -6310,6 +8049,11 @@ var treectl = (function () {
 	var cs = sread('entreed'),
 		vw = window.innerWidth / parseFloat(getComputedStyle(document.body)['font-size']);
 
+	if (notree) {
+		cs = 'na';
+		r.hide();
+	}
+
 	if (cs == 'tree' || (cs != 'na' && vw >= 60))
 		r.entree(null, true);
 
@@ -6318,35 +8062,38 @@ var treectl = (function () {
 		if (!e.state)
 			return;
 
-		var url = new URL(e.state, "https://" + document.location.host);
-		var hbase = url.pathname;
-		var cbase = document.location.pathname;
-		if (url.search.indexOf('doc=') + 1 && hbase == cbase)
+		var url = new URL(e.state, "https://" + location.host),
+			req = url.pathname,
+			hbase = req,
+			cbase = location.pathname,
+			mdoc = /[?&]doc=/.exec('' + url),
+			mdk = /[?&](k=[^&#]+)/.exec('' + url);
+
+		if (mdoc && hbase == cbase)
 			return showfile.show(hbase + showfile.sname(url.search), true);
 
-		r.goto(url.pathname, false, true);
+		if (mdk)
+			req += '?' + mdk[1];
+
+		r.goto(req, false, true);
 	};
 
-	hist_replace(get_evpath() + location.hash);
+	var evp = get_evpath() + (dk ? '?k=' + dk : '');
+	hist_replace(evp + location.hash);
 	r.onscroll = onscroll;
 	return r;
 })();
 
 
-function enspin(sel) {
-	despin(sel);
-	var d = mknod('div');
+function enspin(i) {
+	i = 'dlt_' + i;
+	if (ebi(i))
+		return;
+	var d = mknod('div', i, SPINNER);
 	d.className = 'dumb_loader_thing';
-	d.innerHTML = '🌲';
-	var tgt = QS(sel);
-	tgt.insertBefore(d, tgt.childNodes[0]);
-}
-
-
-function despin(sel) {
-	var o = QSA(sel + '>.dumb_loader_thing');
-	for (var a = o.length - 1; a >= 0; a--)
-		o[a].parentNode.removeChild(o[a]);
+	if (SPINNER_CSS)
+		d.style.cssText = SPINNER_CSS;
+	document.body.appendChild(d);
 }
 
 
@@ -6371,7 +8118,7 @@ var wfp_debounce = (function () {
 		if (--r.n <= 0) {
 			r.n = 0;
 			clearTimeout(r.t);
-			ebi('wfp').style.opacity = 'unset';
+			ebi('wfp').style.opacity = CLOSEST ? 'unset' : 1;
 		}
 	};
 	r.reset = function () {
@@ -6384,6 +8131,19 @@ var wfp_debounce = (function () {
 
 function apply_perms(res) {
 	perms = res.perms || [];
+
+	var axs = [],
+		aclass = '>',
+		chk = ['read', 'write', 'move', 'delete', 'get', 'admin'];
+
+	if (konmai < 0) {
+		acct = 'Ted Faro';
+		srvinf = 'FAS Nexus</span> // <span>57.3 EiB free of 127 EiB';
+		res.shr_who = 'auth';
+		perms = res.perms = chk;
+		have_up2k_idx = have_tags_idx = 1;
+		have_mv = have_del = true;
+	}
 
 	var a = QS('#ops a[data-dest="up2k"]');
 	if (have_up2k_idx) {
@@ -6399,10 +8159,6 @@ function apply_perms(res) {
 	a.style.display = '';
 	tt.att(QS('#ops'));
 
-	var axs = [],
-		aclass = '>',
-		chk = ['read', 'write', 'move', 'delete', 'get', 'admin'];
-
 	for (var a = 0; a < chk.length; a++)
 		if (has(perms, chk[a]))
 			axs.push(chk[a].slice(0, 1).toUpperCase() + chk[a].slice(1));
@@ -6413,10 +8169,14 @@ function apply_perms(res) {
 		axs += '-Only';
 	}
 
+	var dst = "?h";
+	if (idp_login && acct == "*")
+		dst = idp_login.replace(/\{dst\}/g, get_evpath());
+
 	ebi('acc_info').innerHTML = '<span id="srv_info2"><span>' + srvinf +
 		'</span></span><span' + aclass + axs + L.access + '</span>' + (acct != '*' ?
-			'<a href="' + SR + '/?pw=x">' + L.logout + acct + '</a>' :
-			'<a href="?h">Login</a>');
+			'<form id="flogout" method="post" enctype="multipart/form-data"><input type="hidden" name="act" value="logout" /><input id="blogout" type="submit" value="' + L.logout + acct + '"></form>' :
+			'<a href="' + dst + '">' + L.login + '</a>');
 
 	var o = QSA('#ops>a[data-perm]');
 	for (var a = 0; a < o.length; a++) {
@@ -6436,6 +8196,9 @@ function apply_perms(res) {
 			o[a].getAttribute('data-dep') != 'idx' || have_up2k_idx
 		) ? '' : 'none';
 
+	if (in_shr)
+		ebi('opa_srch').style.display = 'none';
+
 	var act = QS('#ops>a.act');
 	if (act && act.style.display === 'none')
 		goto();
@@ -6446,6 +8209,11 @@ function apply_perms(res) {
 		have_read = has(perms, "read"),
 		de = document.documentElement,
 		tds = QSA('#u2conf td');
+
+	shr_who = res.shr_who || shr_who;
+	can_shr = acct != '*' && (have_read || have_write) && (
+		(shr_who == 'a' && has(perms, 'admin')) ||
+		(shr_who == 'auth'));
 
 	clmod(de, "read", have_read);
 	clmod(de, "write", have_write);
@@ -6464,7 +8232,7 @@ function apply_perms(res) {
 	if (up2k)
 		up2k.set_fsearch();
 
-	ebi('widget').style.display = have_read ? '' : 'none';
+	widget.setvis();
 	thegrid.setvis();
 	if (!have_read && have_write)
 		goto('up2k');
@@ -6513,7 +8281,7 @@ function mk_files_header(taglist) {
 		var tag = taglist[a],
 			c1 = tag.slice(0, 1).toUpperCase();
 
-		tag = c1 + tag.slice(1);
+		tag = esc(c1 + tag.slice(1));
 		if (c1 == '.')
 			tag = '<th name="tags/' + tag + '" sort="int"><span>' + tag.slice(1);
 		else
@@ -6739,25 +8507,21 @@ var mukey = (function () {
 		defnot = 'rekobo_alnum';
 
 	var map = {},
-		html = [];
+		html = [],
+		cb = ebi('key_notation');
 
 	for (var k in maps) {
 		if (!maps.hasOwnProperty(k))
 			continue;
 
-		html.push(
-			'<span><input type="radio" name="keytype" value="' + k + '" id="key_' + k + '">' +
-			'<label for="key_' + k + '">' + k + '</label></span>');
-
+		html.push('<option value="{0}">{0}</option>'.format(k));
 		for (var a = 0; a < 24; a++)
 			maps[k][a] = maps[k][a].trim();
 	}
-	ebi('key_notation').innerHTML = html.join('\n');
+	cb.innerHTML = html.join('');
 
-	function set_key_notation(e) {
-		ev(e);
-		var notation = this.getAttribute('value');
-		load_notation(notation);
+	function set_key_notation() {
+		load_notation(cb.value);
 		try_render();
 	}
 
@@ -6814,13 +8578,9 @@ var mukey = (function () {
 	if (!maps[notation])
 		notation = defnot;
 
-	ebi('key_' + notation).checked = true;
+	cb.value = notation;
+	cb.onchange = set_key_notation;
 	load_notation(notation);
-
-	var o = QSA('#key_notation input');
-	for (var a = 0; a < o.length; a++) {
-		o[a].onchange = set_key_notation;
-	}
 
 	return {
 		"render": try_render
@@ -6830,7 +8590,17 @@ var mukey = (function () {
 
 var light, theme, themen;
 var settheme = (function () {
-	var ax = 'abcdefghijklmnopqrstuvwx';
+	var r = {},
+		ax = 'abcdefghijklmnopqrstuvwx',
+		tre = '🌲',
+		chldr = !SPINNER_CSS && SPINNER == tre;
+
+	r.ldr = {
+		'4':['🌴'],
+		'5':['🌭', 'padding:0 0 .7em .7em;filter:saturate(3)'],
+		'6':['📞', 'padding:0;filter:brightness(2) sepia(1) saturate(3) hue-rotate(60deg)'],
+		'7':['▲', 'font-size:3em'], //cp437
+	};
 
 	theme = sread('cpp_thm') || 'a';
 	if (!/^[a-x][yz]/.exec(theme))
@@ -6850,25 +8620,32 @@ var settheme = (function () {
 		showfile.setstyle();
 		bchrome();
 
-		var html = [], itheme = ax.indexOf(theme[0]) * 2 + (light ? 1 : 0),
-			names = ['classic dark', 'classic light', 'pm-monokai', 'flat light', 'vice', 'hotdog stand', 'hacker', 'hi-con'];
+		var html = [],
+			cb = ebi('themes'),
+			itheme = ax.indexOf(theme[0]) * 2 + (light ? 1 : 0),
+			names = ['classic dark', 'classic light', 'pm-monokai', 'flat light', 'vice', 'hotdog stand', 'hacker', 'hi-con', 'phi95 dark', 'phi95'];
 
 		for (var a = 0; a < themes; a++)
-			html.push('<a href="#" class="btn tgl' + (a == itheme ? ' on' : '') +
-				'" tt="' + (names[a] || 'custom') + '">' + a + '</a>');
+			html.push('<option value="{0}">{0} ┃ {1}</option>'.format(a, names[a] || 'custom'));
 
 		ebi('themes').innerHTML = html.join('');
-		var btns = QSA('#themes a');
-		for (var a = 0; a < themes; a++)
-			btns[a].onclick = settheme;
+		cb.value = itheme;
+		cb.onchange = r.onsel;
+
+		if (chldr) {
+			var x = r.ldr[itheme] || [tre];
+			SPINNER = x[0];
+			SPINNER_CSS = x[1];
+		}
 
 		bcfg_set('light', light);
-		tt.att(ebi('themes'));
 	}
 
-	function settheme(e) {
-		var i = e;
-		try { ev(e); i = e.target.textContent; } catch (ex) { }
+	r.onsel = function () {
+		r.go(parseInt(ebi('themes').value));
+	};
+
+	r.go = function (i) {
 		light = i % 2 == 1;
 		var c = ax[Math.floor(i / 2)],
 			l = light ? 'y' : 'z';
@@ -6876,35 +8653,57 @@ var settheme = (function () {
 		themen = c + l;
 		swrite('cpp_thm', theme);
 		freshen();
-	}
+	};
 
 	freshen();
-	return settheme;
+	return r;
+})();
+
+
+var setfszf = (function () {
+	function freshen() {
+		var cb = ebi('fszfmt'),
+			fmt = sread("fszfmt", humansize_fmts) || window.dfszf;
+		if (!has(humansize_fmts, fmt))
+			fmt = '1';
+		window.filesizefun = window['humansize_' + fmt];
+		cb.onchange = onch;
+		if (cb.value != fmt)
+			cb.value = fmt;
+	}
+	function onch(e) {
+		ev(e);
+		setfmt(ebi('fszfmt').value)
+	}
+	function setfmt(fmt) {
+		swrite("fszfmt", fmt);
+		freshen();
+		treectl.gentab(get_evpath(), treectl.lsc);
+	}
+	freshen();
+	return setfmt;
 })();
 
 
 (function () {
 	function freshen() {
-		lang = sread("cpp_lang", LANGS) || lang;
-		var html = [];
-		for (var k in Ls)
-			if (Ls.hasOwnProperty(k))
-				html.push('<a href="#" class="btn tgl' + (k == lang ? ' on' : '') +
-					'" tt="' + Ls[k].tt + '">' + k + '</a>');
-
-		ebi('langs').innerHTML = html.join('');
-		var btns = QSA('#langs a');
-		for (var a = 0, aa = btns.length; a < aa; a++)
-			btns[a].onclick = setlang;
+		var cb = ebi('langs'), html = [];
+		for (var a = 0; a < LANGN.length; a++) {
+			html.push('<option value="{0}">{0} ┃ {1}</option>'.format(LANGN[a][0], LANGN[a][1]));
+		}
+		cb.innerHTML = html.join('');
+		cb.onchange = setlang;
+		cb.value = lang;
 	}
 
 	function setlang(e) {
 		ev(e);
-		L = Ls[this.textContent];
-		swrite("cpp_lang", this.textContent);
+		lang = ebi('langs').value;
+		setck('cplng=' + lang);
 		freshen();
-		modal.confirm(Ls.eng.lang_set + "\n\n" + Ls.nor.lang_set, location.reload.bind(location), null);
-	};
+		var t = L.tt == 'English' ? '' : Ls.eng.lang_set;
+		modal.confirm(L.lang_set + "\n\n" + t, location.reload.bind(location), null);
+	}
 
 	freshen();
 })();
@@ -6920,8 +8719,8 @@ var arcfmt = (function () {
 			["pax", "tar=pax", L.fz_pax],
 			["tgz", "tar=gz", L.fz_targz],
 			["txz", "tar=xz", L.fz_tarxz],
-			["zip", "zip=utf8", L.fz_zip8],
-			["zip_dos", "zip", L.fz_zipd],
+			["zip", "zip", L.fz_zip8],
+			["zip_dos", "zip=dos", L.fz_zipd],
 			["zip_crc", "zip=crc", L.fz_zipc]
 		];
 
@@ -6952,15 +8751,24 @@ var arcfmt = (function () {
 			if (!/^(zip|tar|pax|tgz|txz)$/.exec(txt))
 				continue;
 
-			var ofs = href.lastIndexOf('?');
-			if (ofs < 0)
+			var m = /(.*[?&])(tar|zip)([^&#]*)(.*)$/.exec(href);
+			if (!m)
 				throw new Error('missing arg in url');
 
-			o.setAttribute("href", href.slice(0, ofs + 1) + arg);
+			o.setAttribute("href", m[1] + arg + m[4]);
 			o.textContent = fmt.split('_')[0];
 		}
 		ebi('selzip').textContent = fmt.split('_')[0];
 		ebi('selzip').setAttribute('fmt', arg);
+
+		QS('#zip1 span').textContent = fmt.split('_')[0];
+		ebi('zip1').setAttribute("href",
+			get_evpath() + (dk ? '?k=' + dk + '&': '?') + arg);
+
+		if (!have_zip) {
+			ebi('zip1').style.display = 'none';
+			ebi('selzip').style.display = 'none';
+		}
 	}
 
 	function try_render() {
@@ -6994,6 +8802,7 @@ var msel = (function () {
 	var r = {};
 	r.sel = null;
 	r.all = null;
+	r.hist = {};
 	r.so = null;  // selection origin
 	r.pr = null;  // previous range
 
@@ -7019,12 +8828,19 @@ var msel = (function () {
 			vbase = get_evpath();
 
 		for (var a = 0, aa = links.length; a < aa; a++) {
-			var href = noq_href(links[a]).replace(/\/$/, ""),
+			var qhref = links[a].getAttribute('href'),
+				href = qhref.split('?')[0].replace(/\/$/, ""),
 				item = {};
 
 			item.id = links[a].getAttribute('id');
 			item.sel = clgot(links[a].closest('tr'), 'sel');
 			item.vp = href.indexOf('/') !== -1 ? href : vbase + href;
+
+			if (dk) {
+				var m = /[?&](k=[^&#]+)/.exec(qhref);
+				item.q = m ? '?' + m[1] : '';
+			}
+			else item.q = '';
 
 			r.all.push(item);
 			if (item.sel)
@@ -7035,10 +8851,14 @@ var msel = (function () {
 		}
 	};
 
-	r.loadsel = function (sel) {
+	r.loadsel = function (vp, sel) {
 		if (!sel || !r.so || !ebi(r.so))
 			r.so = r.pr = null;
 
+		if (!sel)
+			return r.origin_id(null);
+
+		r.hist[vp] = sel;
 		r.sel = [];
 		r.load();
 
@@ -7070,6 +8890,11 @@ var msel = (function () {
 		thegrid.loadsel();
 		fileman.render();
 		showfile.updtree();
+
+		if (r.sel.length)
+			r.hist[get_evpath()] = r.sel;
+		else
+			delete r.hist[get_evpath()];
 	};
 	r.seltgl = function (e) {
 		ev(e);
@@ -7142,6 +8967,9 @@ var msel = (function () {
 			frm = mknod('form'),
 			txt = [];
 
+		if (dk)
+			arg += '&k=' + dk;
+
 		for (var a = 0; a < sel.length; a++)
 			txt.push(vsplit(sel[a].vp)[1]);
 
@@ -7166,7 +8994,7 @@ var msel = (function () {
 		ev(e);
 		var sel = r.getsel();
 		for (var a = 0; a < sel.length; a++)
-			dl_file(sel[a].vp);
+			dl_file(sel[a].vp + sel[a].q);
 	};
 	r.render = function () {
 		var tds = QSA('#files tbody td+td+td'),
@@ -7179,14 +9007,39 @@ var msel = (function () {
 		r.selui(true);
 		arcfmt.render();
 		fileman.render();
-		ebi('selzip').style.display = is_srch ? 'none' : '';
+
+		var zipvis = (is_srch || !have_zip) ? 'none' : '';
+		ebi('selzip').style.display = zipvis;
+		ebi('zip1').style.display = zipvis;
 	}
 	return r;
 })();
 
 
 (function () {
-	if (!window.FormData)
+	if (!FormData)
+		return;
+
+	var form = QS('#op_new_md>form'),
+		tb = QS('#op_new_md input[name="name"]');
+
+	form.onsubmit = function (e) {
+		if (tb.value) {
+			if (toast.tag == L.mk_noname)
+				toast.hide();
+
+			return true;
+		}
+
+		ev(e);
+		toast.err(10, L.mk_noname, L.mk_noname);
+		return false;
+	};
+})();
+
+
+(function () {
+	if (!FormData)
 		return;
 
 	var form = QS('#op_mkdir>form'),
@@ -7198,8 +9051,16 @@ var msel = (function () {
 
 	form.onsubmit = function (e) {
 		ev(e);
-		clmod(sf, 'vis', 1);
 		var dn = tb.value;
+		if (!dn) {
+			toast.err(10, L.mk_noname, L.mk_noname);
+			return false;
+		}
+
+		if (toast.tag == L.mk_noname || toast.tag == L.fd_xe1)
+			toast.hide();
+
+		clmod(sf, 'vis', 1);
 		sf.textContent = 'creating "' + dn + '"...';
 
 		var fd = new FormData();
@@ -7226,7 +9087,7 @@ var msel = (function () {
 		xhrchk(this, L.fd_xe1, L.fd_xe2);
 
 		if (this.status !== 201) {
-			sf.textContent = 'error: ' + unpre(this.responseText);
+			sf.textContent = 'error: ' + hunpre(this.responseText);
 			return;
 		}
 
@@ -7256,9 +9117,14 @@ var msel = (function () {
 		sf.textContent = 'sending...';
 
 		var xhr = new XHR(),
+			sel = msel.getsel(),
+			msg = uricom_enc(tb.value),
 			ct = 'application/x-www-form-urlencoded;charset=UTF-8';
 
-		xhr.msg = tb.value;
+		for (var a = 0; a < sel.length; a++)
+			msg += "&sel=" + sel[a].vp;
+
+		xhr.msg = msg;
 		xhr.open('POST', get_evpath(), true);
 		xhr.responseType = 'text';
 		xhr.onload = xhr.onerror = cb;
@@ -7266,21 +9132,25 @@ var msel = (function () {
 		if (xhr.overrideMimeType)
 			xhr.overrideMimeType('Content-Type', ct);
 
-		xhr.send('msg=' + uricom_enc(xhr.msg));
+		xhr.send('msg=' + xhr.msg);
 		return false;
 	};
 
 	function cb() {
 		xhrchk(this, L.fsm_xe1, L.fsm_xe2);
 
-		if (this.status < 200 || this.status > 201) {
-			sf.textContent = 'error: ' + unpre(this.responseText);
+		if (this.status < 200 || this.status > 202) {
+			sf.textContent = 'error: ' + hunpre(this.responseText);
 			return;
 		}
 
 		tb.value = '';
 		clmod(sf, 'vis');
-		sf.textContent = 'sent: "' + this.msg + '"';
+		var txt = 'sent: <code>' + esc(this.msg) + '</code>';
+		if (this.status == 202)
+			txt += '<br />&nbsp; got: <code>' + esc(this.responseText) + '</code>';
+
+		sf.innerHTML = txt;
 		setTimeout(function () {
 			treectl.goto();
 		}, 100);
@@ -7308,11 +9178,24 @@ var globalcss = (function () {
 					var css = ds[b].cssText.split(/\burl\(/g);
 					ret += css[0];
 					for (var c = 1; c < css.length; c++) {
-						var delim = (/^["']/.exec(css[c])) ? css[c].slice(0, 1) : '';
-						ret += 'url(' + delim + ((css[c].slice(0, 8).indexOf('://') + 1 || css[c].startsWith('/')) ? '' : base) +
-							css[c].slice(delim ? 1 : 0);
+						var m = /(^ *["']?)(.*)/.exec(css[c]),
+							delim = m[1],
+							ctxt = m[2],
+							is_abs = /^\/|[^)/:]+:\/\//.exec(ctxt);
+
+						ret += 'url(' + delim + (is_abs ? '' : base) + ctxt;
 					}
 					ret += '\n';
+				}
+				if (ret.indexOf('\n@import') + 1) {
+					var c0 = ret.split('\n'),
+						c1 = [],
+						c2 = [];
+
+					for (var a = 0; a < c0.length; a++)
+						(c0[a].startsWith('@import') ? c1 : c2).push(c0[a]);
+
+					ret = c1.concat(c2).join('\n');
 				}
 			}
 			catch (ex) {
@@ -7356,8 +9239,11 @@ function show_md(md, name, div, url, depth) {
 
 	wfp_debounce.hide();
 	if (!marked) {
-		if (depth)
-			return toast.warn(10, errmsg + (window.WebAssembly ? 'failed to load marked.js' : 'your browser is too old'));
+		if (depth) {
+			clmod(div, 'raw', 1);
+			div.textContent = "--[ " + name + " ]---------\r\n" + md;
+			return toast.warn(10, errmsg + (WebAssembly ? 'failed to load marked.js' : 'your browser is too old'));
+		}
 
 		wfp_debounce.n--;
 		return import_js(SR + '/.cpr/deps/marked.js', function () {
@@ -7371,7 +9257,7 @@ function show_md(md, name, div, url, depth) {
 
 	var marked_opts = {
 		headerPrefix: 'md-',
-		breaks: true,
+		breaks: !md_no_br,
 		gfm: true
 	};
 	var ext = md_plug.pre;
@@ -7385,7 +9271,7 @@ function show_md(md, name, div, url, depth) {
 		if (!have_emp)
 			md_html = DOMPurify.sanitize(md_html);
 
-		if (sandbox(div, sb_md, 'mdo', md_html))
+		if (sandbox(div, sb_md, sba_md, 'mdo', md_html))
 			return;
 
 		ext = md_plug.post;
@@ -7432,23 +9318,31 @@ function set_tabindex() {
 }
 
 
-function show_readme(md) {
+function show_readme(md, n) {
+	var tgt = ebi(n ? 'epi' : 'pro');
+
 	if (!treectl.ireadme)
-		return sandbox(ebi('epi'), '', '', 'a');
+		return sandbox(tgt, '', '', '', 'a');
 
-	show_md(md, 'README.md', ebi('epi'));
+	show_md(md, n ? 'README.md' : 'PREADME.md', tgt);
 }
-if (readme)
-	show_readme(readme);
+for (var a = 0; a < readmes.length; a++)
+	if (readmes[a])
+		show_readme(readmes[a], a);
 
 
-function sandbox(tgt, rules, cls, html) {
+function sandbox(tgt, rules, allow, cls, html) {
 	if (!treectl.ireadme) {
 		tgt.innerHTML = html ? L.md_off : '';
 		return;
 	}
 	if (!rules || (html || '').indexOf('<') == -1) {
 		tgt.innerHTML = html;
+		clmod(tgt, 'sb');
+		return false;
+	}
+	if (!CLOSEST) {
+		tgt.textContent = html;
 		clmod(tgt, 'sb');
 		return false;
 	}
@@ -7471,7 +9365,8 @@ function sandbox(tgt, rules, cls, html) {
 			env = js.split(/\blogues *=/)[0] + 'a;';
 	}
 
-	html = '<html class="iframe ' + document.documentElement.className + '"><head><style>' + globalcss() +
+	html = '<html class="iframe ' + document.documentElement.className +
+		'"><head><style>html{background:#eee;color:#000}</style><style>' + globalcss() +
 		'</style><base target="_parent"></head><body id="b" class="logue ' + cls + '">' + html +
 		'<script>' + env + '</script>' + sandboxjs() +
 		'<script>var d=document.documentElement,TS="' + TS + '",' +
@@ -7497,6 +9392,7 @@ function sandbox(tgt, rules, cls, html) {
 	var fr = mknod('iframe');
 	fr.setAttribute('title', 'folder ' + tid + 'logue');
 	fr.setAttribute('sandbox', rules ? 'allow-' + rules.replace(/ /g, ' allow-') : '');
+	fr.setAttribute('allow', allow);
 	fr.setAttribute('srcdoc', html);
 	tgt.appendChild(fr);
 	treectl.sb_msg = true;
@@ -7517,7 +9413,7 @@ window.addEventListener("message", function (e) {
 					el.parentNode.removeChild(el.previousSibling);
 
 			el.style.height = (parseInt(t[2]) + SBH) + 'px';
-			el.style.visibility = 'unset';
+			el.style.visibility = CLOSEST ? 'unset' : 'block';
 			wfp_debounce.show();
 		}
 		else if (t[0] == 'iscroll') {
@@ -7543,8 +9439,11 @@ window.addEventListener("message", function (e) {
 
 
 if (sb_lg && logues.length) {
-	sandbox(ebi('pro'), sb_lg, '', logues[0]);
-	sandbox(ebi('epi'), sb_lg, '', logues[1]);
+	if (logues[1] === Ls.eng.f_empty)
+		logues[1] = L.f_empty;
+
+	sandbox(ebi('pro'), sb_lg, sba_lg, '', logues[0]);
+	sandbox(ebi('epi'), sb_lg, sba_lg, '', logues[1]);
 }
 
 
@@ -7594,15 +9493,29 @@ var unpost = (function () {
 			if (!xhrchk(this, L.fu_xe1, L.fu_xe2))
 				return ebi('op_unpost').innerHTML = L.fu_xe1;
 
-			var res = JSON.parse(this.responseText);
+			try {
+				var ores = JSON.parse(this.responseText);
+			}
+			catch (ex) {
+				return ebi('op_unpost').innerHTML = '<p>' + L.badreply + ':</p>' + unpre(this.responseText);
+			}
+
+			if (ores.nou)
+				html.push('<p>' + L.un_nou + '</p>');
+
+			if (ores.noc)
+				html.push('<p>' + L.un_noc + '</p>');
+
+			var res = ores.f;
+
 			if (res.length) {
-				if (res.length == 2000)
+				if (ores.of)
 					html.push("<p>" + L.un_max);
 				else
-					html.push("<p>" + L.un_avail.format(res.length));
+					html.push("<p>" + L.un_avail.format(ores.nc, ores.nu));
 
-				html.push(" &ndash; " + L.un_m2 + "</p>");
-				html.push("<table><thead><tr><td></td><td>time</td><td>size</td><td>file</td></tr></thead><tbody>");
+				html.push("<br />" + L.un_m2 + "</p>");
+				html.push("<table><thead><tr><td></td><td>time</td><td>size</td><td>done</td><td>file</td></tr></thead><tbody>");
 			}
 			else
 				html.push('-- <em>' + (filt.value ? L.un_no2 : L.un_no1) + '</em>');
@@ -7615,10 +9528,13 @@ var unpost = (function () {
 							'<tr><td></td><td colspan="3" style="padding:.5em">' +
 							'<a me="' + me + '" class="n' + a + '" n2="' + (a + mods[b]) +
 							'" href="#">' + L.un_next.format(Math.min(mods[b], res.length - a)) + '</a></td></tr>');
+
+				var done = res[a].pd === undefined;
 				html.push(
-					'<tr><td><a me="' + me + '" class="n' + a + '" href="#">' + L.un_del + '</a></td>' +
-					'<td>' + unix2iso(res[a].at) + '</td>' +
-					'<td>' + res[a].sz + '</td>' +
+					'<tr><td><a me="' + me + '" class="n' + a + '" href="#">' + (done ? L.un_del : L.un_abrt) + '</a></td>' +
+					'<td>' + unix2ui(res[a].at) + '</td>' +
+					'<td>' + ('' + res[a].sz).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + '</td>' +
+					(done ? '<td>100%</td>' : '<td>' + res[a].pd + '%</td>') +
 					'<td>' + linksplit(res[a].vp).join('<span> / </span>') + '</td></tr>');
 			}
 
@@ -7628,7 +9544,7 @@ var unpost = (function () {
 			r.me = me;
 		}
 
-		var q = SR + '/?ups';
+		var q = get_evpath() + '?ups';
 		if (filt.value)
 			q += '&filter=' + uricom_enc(filt.value, true);
 
@@ -7642,7 +9558,7 @@ var unpost = (function () {
 
 	function linklist() {
 		var ret = [],
-			base = document.location.origin.replace(/\/$/, '');
+			base = location.origin.replace(/\/$/, '');
 
 		for (var a = 0; a < r.files.length; a++)
 			ret.push(base + r.files[a].vp);
@@ -7667,7 +9583,23 @@ var unpost = (function () {
 		toast.ok(5, this.responseText);
 
 		if (!QS('#op_unpost a[me]'))
-			ebi(goto_unpost());
+			goto_unpost();
+
+		var fi = window.up2k && up2k.st.files;
+		if (fi && fi.length < 9) {
+			for (var a = 0; a < fi.length; a++) {
+				var f = fi[a];
+				if (!f.done && (f.rechecks || f.want_recheck) &&
+					!has(up2k.st.todo.handshake, f) &&
+					!has(up2k.st.busy.handshake, f)
+				) {
+					up2k.st.todo.handshake.push(f);
+					up2k.ui.seth(f.n, 2, L.u_hashdone);
+					up2k.ui.seth(f.n, 1, '📦 wait');
+					up2k.ui.move(f.n, 'bz');
+				}
+			}
+		}
 	}
 
 	ct.onclick = function (e) {
@@ -7692,7 +9624,17 @@ var unpost = (function () {
 			if (!links.length)
 				continue;
 
-			req.push(uricom_dec(r.files[a].vp.split('?')[0]));
+			var f = r.files[a];
+			if (f.k == 'u') {
+				var vp = vsplit(f.vp.split('?')[0]),
+					dfn = uricom_dec(vp[1]);
+				for (var iu = 0; iu < up2k.st.files.length; iu++) {
+					var uf = up2k.st.files[iu];
+					if (uf.name == dfn && uf.purl == vp[0])
+						return modal.alert(L.un_uf5);
+				}
+			}
+			req.push(uricom_dec(f.vp.split('?')[0]));
 			for (var b = 0; b < links.length; b++) {
 				links[b].removeAttribute('href');
 				links[b].innerHTML = '[busy]';
@@ -7704,7 +9646,7 @@ var unpost = (function () {
 		var xhr = new XHR();
 		xhr.n = n;
 		xhr.n2 = n2;
-		xhr.open('POST', SR + '/?delete&lim=' + req.length, true);
+		xhr.open('POST', SR + '/?delete&unpost&lim=' + req.length, true);
 		xhr.onload = xhr.onerror = unpost_delete_cb;
 		xhr.send(JSON.stringify(req));
 	};
@@ -7735,7 +9677,7 @@ var unpost = (function () {
 		ev(e);
 		var txt = linklist();
 		cliptxt(txt + '\n', function () {
-			toast.inf(5, txt.split('\n').length + ' links copied to clipboard');
+			toast.inf(5, L.un_clip.format(txt.split('\n').length));
 		});
 	};
 
@@ -7755,7 +9697,7 @@ function wintitle(txt, noname) {
 	if (s_name && !noname)
 		txt = s_name + ' ' + txt;
 
-	txt += get_vpath().slice(1, -1).split('/').pop();
+	txt += uricom_dec(get_evpath()).slice(1, -1).split('/').pop();
 
 	document.title = txt;
 }
@@ -7815,20 +9757,33 @@ ebi('files').onclick = ebi('docul').onclick = function (e) {
 		treectl.reqls(tgt.getAttribute('href'), true);
 		return ev(e);
 	}
+	if (tgt && /\.PARTIAL(\?|$)/.exec('' + tgt.getAttribute('href')) && !window.partdlok) {
+		ev(e);
+		modal.confirm(L.f_partial, function () {
+			window.partdlok = 1;
+			tgt.click();
+		}, null);
+	}
 
 	tgt = e.target.closest('a[hl]');
 	if (tgt) {
 		var a = ebi(tgt.getAttribute('hl')),
+			href = a.getAttribute('href'),
 			fun = function () {
-				showfile.show(noq_href(a), tgt.getAttribute('lang'));
+				showfile.show(href, tgt.getAttribute('lang'));
+			},
+			tfun = function () {
+				bcfg_set('taildoc', showfile.taildoc = true);
+				fun();
 			},
 			szs = ft2dict(a.closest('tr'))[0].sz,
 			sz = parseInt(szs.replace(/[, ]/g, ''));
 
-		if (sz < 1024 * 1024)
+		if (sz < 1024 * 1024 || showfile.taildoc)
 			fun();
 		else
-			modal.confirm(L.f_bigtxt.format(f2f(sz / 1024 / 1024, 1)), fun, null);
+			modal.confirm(L.f_bigtxt.format(f2f(sz / 1024 / 1024, 1)), fun, function() {
+				modal.confirm(L.f_bigtxt2, tfun, null)});
 
 		return ev(e);
 	}
@@ -7847,6 +9802,7 @@ function reload_mp() {
 		mpo.au = mp.au;
 		mpo.au2 = mp.au2;
 		mpo.acs = mp.acs;
+		mpo.fau = mp.fau;
 		mpl.unbuffer();
 	}
 	var plays = QSA('tr>td:first-child>a.play');
@@ -7854,7 +9810,7 @@ function reload_mp() {
 		plays[a].parentNode.innerHTML = '-';
 
 	mp = new MPlayer();
-	if (mp.au && mp.au.tid) {
+	if (mp.au && mp.au.tid && mp.au.evp == get_evpath()) {
 		var el = QS('a#a' + mp.au.tid);
 		if (el)
 			clmod(el, 'act', 1);
@@ -7881,19 +9837,13 @@ function reload_browser() {
 
 	for (var a = 0; a < parts.length - 1; a++) {
 		link += parts[a] + '/';
+		var link2 = dks[link] ? addq(link, 'k=' + dks[link]) : link;
+
 		o = mknod('a');
-		o.setAttribute('href', link);
+		o.setAttribute('href', link2);
 		o.textContent = uricom_dec(parts[a]) || '/';
 		ebi('path').appendChild(mknod('i'));
 		ebi('path').appendChild(o);
-	}
-
-	var oo = QSA('#files>tbody>tr>td:nth-child(3)');
-	for (var a = 0, aa = oo.length; a < aa; a++) {
-		var sz = oo[a].textContent.replace(/ +/g, ""),
-			hsz = sz.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-
-		oo[a].textContent = hsz;
 	}
 
 	reload_mp();
@@ -7916,3 +9866,14 @@ function reload_browser() {
 	msel.render();
 }
 treectl.hydrate();
+
+if (!fullui && (window.ui_nombar || /[?&]nombar\b/.exec(sloc0))) ebi('ops').style.display = 'none';
+if (!fullui && (window.ui_noacci || /[?&]noacci\b/.exec(sloc0))) ebi('acc_info').style.display = 'none';
+if (!fullui && (window.ui_nosrvi || /[?&]nosrvi\b/.exec(sloc0))) ebi('srv_info').style.display = 'none';
+if (!fullui && (window.ui_nocpla || /[?&]nocpla\b/.exec(sloc0))) ebi('goh').style.display = 'none';
+if (!fullui && (window.ui_nolbar || /[?&]nolbar\b/.exec(sloc0))) ebi('wfp').style.display = 'none';
+if (!fullui && (window.ui_noctxb || /[?&]noctxb\b/.exec(sloc0))) ebi('wtoggle').style.display = 'none';
+if (!fullui && (window.ui_norepl || /[?&]norepl\b/.exec(sloc0))) ebi('repl').style.display = 'none';
+
+var m = /[?&]theme=([0-9]+)/.exec(sloc0);
+if (m) settheme.go(parseInt(m[1]));

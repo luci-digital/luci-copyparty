@@ -22,6 +22,8 @@ set -e
 #   modifies the keyfinder python lib to load the .so in ~/pe
 
 
+export FORCE_COLOR=1
+
 linux=1
 
 win=
@@ -186,12 +188,15 @@ install_keyfinder() {
 		echo "so not found at $sop"
 		exit 1
 	}
-	
+
+	x=${-//[^x]/}; set -x; cat /etc/alpine-release
 	# rm -rf /Users/ed/Library/Python/3.9/lib/python/site-packages/*keyfinder*
 	CFLAGS="-I$h/pe/keyfinder/include -I/opt/local/include -I/usr/include/ffmpeg" \
+	CXXFLAGS="-I$h/pe/keyfinder/include -I/opt/local/include -I/usr/include/ffmpeg" \
 	LDFLAGS="-L$h/pe/keyfinder/lib -L$h/pe/keyfinder/lib64 -L/opt/local/lib" \
-	PKG_CONFIG_PATH=/c/msys64/mingw64/lib/pkgconfig \
+	PKG_CONFIG_PATH="/c/msys64/mingw64/lib/pkgconfig:$h/pe/keyfinder/lib/pkgconfig" \
 	$pybin -m pip install --user keyfinder
+	[ "$x" ] || set +x
 
 	pypath="$($pybin -c 'import keyfinder; print(keyfinder.__file__)')"
 	for pyso in "${pypath%/*}"/*.so; do
@@ -223,12 +228,15 @@ install_vamp() {
 	#   use msys2 in mingw-w64 mode
 	#   pacman -S --needed mingw-w64-x86_64-{ffmpeg,python,python-pip,vamp-plugin-sdk}
 	
-	$pybin -m pip install --user vamp
+	$pybin -m pip install --user vamp || {
+		printf '\n\033[7malright, trying something else...\033[0m\n'
+		$pybin -m pip install --user --no-build-isolation vamp
+	}
 
 	cd "$td"
 	echo '#include <vamp-sdk/Plugin.h>' | g++ -x c++ -c -o /dev/null - || [ -e ~/pe/vamp-sdk ] || {
 		printf '\033[33mcould not find the vamp-sdk, building from source\033[0m\n'
-		(dl_files yolo https://code.soundsoftware.ac.uk/attachments/download/2691/vamp-plugin-sdk-2.10.0.tar.gz)
+		(dl_files yolo https://ocv.me/mirror/vamp-plugin-sdk-2.10.0.tar.gz)
 		sha512sum -c <(
 			echo "153b7f2fa01b77c65ad393ca0689742d66421017fd5931d216caa0fcf6909355fff74706fabbc062a3a04588a619c9b515a1dae00f21a57afd97902a355c48ed  -"
 		) <vamp-plugin-sdk-2.10.0.tar.gz
@@ -244,7 +252,7 @@ install_vamp() {
 	cd "$td"
 	have_beatroot || {
 		printf '\033[33mcould not find the vamp beatroot plugin, building from source\033[0m\n'
-		(dl_files yolo https://code.soundsoftware.ac.uk/attachments/download/885/beatroot-vamp-v1.0.tar.gz)
+		(dl_files yolo https://ocv.me/mirror/beatroot-vamp-v1.0.tar.gz)
 		sha512sum -c <(
 			echo "1f444d1d58ccf565c0adfe99f1a1aa62789e19f5071e46857e2adfbc9d453037bc1c4dcb039b02c16240e9b97f444aaff3afb625c86aa2470233e711f55b6874  -"
 		) <beatroot-vamp-v1.0.tar.gz

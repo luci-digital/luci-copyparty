@@ -8,7 +8,7 @@ import re
 
 from .__init__ import PY2
 from .th_srv import HAVE_PIL, HAVE_PILF
-from .util import BytesIO  # type: ignore
+from .util import BytesIO, html_escape  # type: ignore
 
 
 class Ico(object):
@@ -31,10 +31,9 @@ class Ico(object):
 
         w = 100
         h = 30
-        if not self.args.th_no_crop and as_thumb:
+        if as_thumb:
             sw, sh = self.args.th_size.split("x")
             h = int(100.0 / (float(sw) / float(sh)))
-            w = 100
 
         if chrome:
             # cannot handle more than ~2000 unique SVGs
@@ -75,7 +74,7 @@ class Ico(object):
                 try:
                     _, _, tw, th = pb.textbbox((0, 0), ext)
                 except:
-                    tw, th = pb.textsize(ext)
+                    tw, th = pb.textsize(ext)  # type: ignore
 
                 tw += len(ext)
                 cw = tw // len(ext)
@@ -95,10 +94,21 @@ class Ico(object):
 <?xml version="1.0" encoding="UTF-8"?>
 <svg version="1.1" viewBox="0 0 100 {}" xmlns="http://www.w3.org/2000/svg"><g>
 <rect width="100%" height="100%" fill="#{}" />
-<text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" xml:space="preserve"
+<text x="50%" y="{}" dominant-baseline="middle" text-anchor="middle" xml:space="preserve"
   fill="#{}" font-family="monospace" font-size="14px" style="letter-spacing:.5px">{}</text>
 </g></svg>
 """
-        svg = svg.format(h, c[:6], c[6:], ext)
+
+        txt = html_escape(ext, True)
+        if "\n" in txt:
+            lines = txt.split("\n")
+            n = len(lines)
+            y = "20%" if n == 2 else "10%" if n == 3 else "0"
+            zs = '<tspan x="50%%" dy="1.2em">%s</tspan>'
+            txt = "".join([zs % (x,) for x in lines])
+        else:
+            y = "50%"
+
+        svg = svg.format(h, c[:6], y, c[6:], txt)
 
         return "image/svg+xml", svg.encode("utf-8")

@@ -13,6 +13,9 @@
 
 # other stuff
 
+## [`TODO.md`](TODO.md)
+* planned features / fixes / changes
+
 ## [`example.conf`](example.conf)
 * example config file for `-c`
 
@@ -21,6 +24,9 @@
 
 ## [`changelog.md`](changelog.md)
 * occasionally grabbed from github release notes
+
+## [`synology-dsm.md`](synology-dsm.md)
+* running copyparty on a synology nas
 
 ## [`devnotes.md`](devnotes.md)
 * technical stuff

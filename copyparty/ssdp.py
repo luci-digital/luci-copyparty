@@ -5,11 +5,11 @@ import errno
 import re
 import select
 import socket
-from email.utils import formatdate
+import time
 
 from .__init__ import TYPE_CHECKING
 from .multicast import MC_Sck, MCast
-from .util import CachedSet, html_escape, min_ex
+from .util import CachedSet, formatdate, html_escape, min_ex
 
 if TYPE_CHECKING:
     from .broker_util import BrokerCli
@@ -84,7 +84,7 @@ class SSDPr(object):
         name = self.args.doctitle
         zs = zs.strip().format(c(ubase), c(url), c(name), c(self.args.zsid))
         hc.reply(zs.encode("utf-8", "replace"))
-        return False  # close connectino
+        return False  # close connection
 
 
 class SSDPd(MCast):
@@ -141,9 +141,29 @@ class SSDPd(MCast):
         self.log("stopped", 2)
 
     def run2(self) -> None:
+        try:
+            if self.args.no_poll:
+                raise Exception()
+            fd2sck = {}
+            srvpoll = select.poll()
+            for sck in self.srv:
+                fd = sck.fileno()
+                fd2sck[fd] = sck
+                srvpoll.register(fd, select.POLLIN)
+        except Exception as ex:
+            srvpoll = None
+            if not self.args.no_poll:
+                t = "WARNING: failed to poll(), will use select() instead: %r"
+                self.log(t % (ex,), 3)
+
         while self.running:
-            rdy = select.select(self.srv, [], [], self.args.z_chk or 180)
-            rx: list[socket.socket] = rdy[0]  # type: ignore
+            if srvpoll:
+                pr = srvpoll.poll((self.args.z_chk or 180) * 1000)
+                rx = [fd2sck[x[0]] for x in pr if x[1] & select.POLLIN]
+            else:
+                rdy = select.select(self.srv, [], [], self.args.z_chk or 180)
+                rx: list[socket.socket] = rdy[0]  # type: ignore
+
             self.rxc.cln()
             buf = b""
             addr = ("0", 0)
@@ -168,7 +188,7 @@ class SSDPd(MCast):
             except:
                 pass
 
-        self.srv = {}
+        self.srv.clear()
 
     def eat(self, buf: bytes, addr: tuple[str, int]) -> None:
         cip = addr[0]
@@ -209,7 +229,7 @@ CONFIGID.UPNP.ORG: 1
 
 """
         v4 = srv.ip.replace("::ffff:", "")
-        zs = zs.format(formatdate(usegmt=True), v4, srv.hport, self.args.zsid)
+        zs = zs.format(formatdate(), v4, srv.hport, self.args.zsid)
         zb = zs[1:].replace("\n", "\r\n").encode("utf-8", "replace")
         srv.sck.sendto(zb, addr[:2])
 

@@ -16,7 +16,8 @@ uname -s | grep WOW64 && m=64 || m=32
 uname -s | grep NT-10 && w10=1 || w7=1
 [ $w7 ] && [ -e up2k.sh ] && [ ! "$1" ] && ./up2k.sh
 
-[ $w7 ] && pyv=37 || pyv=311
+[ $w7 ] && pyv=37 || pyv=313
+[ $w7 ] && sfx=en || sfx=sfx
 esuf=
 [ $w7 ] && [ $m = 32 ] && esuf=32
 [ $w7 ] && [ $m = 64 ] && esuf=-winpe64
@@ -33,11 +34,19 @@ dl https://192.168.123.1:3923/cpp/scripts/pyinstaller/loader.ico
 dl https://192.168.123.1:3923/cpp/scripts/pyinstaller/loader.py
 dl https://192.168.123.1:3923/cpp/scripts/pyinstaller/loader.rc
 
+[ $sfx = en ] && {
+    dl https://192.168.123.1:3923/cpp/dist/copyparty-en.py
+
+    st_en=$(cat copyparty-en.py | awk '/^STAMP = [0-9]+/{print$3;exit}') 2>/dev/null
+    st_sfx=$(cat copyparty-sfx.py | awk '/^STAMP = [0-9]+/{print$3;exit}') 2>/dev/null
+    [ $st_en ] && [ $st_en -ge $st_sfx ] || sfx=sfx
+}
+
 rm -rf $TEMP/pe-copyparty*
-python copyparty-sfx.py --version
+python copyparty-$sfx.py --version
 
 rm -rf mods; mkdir mods
-cp -pR $TEMP/pe-copyparty/copyparty/ $TEMP/pe-copyparty/{ftp,j2}/* mods/
+cp -pR $TEMP/pe-copyparty/{copyparty,partftpy}/ $TEMP/pe-copyparty/{ftp,j2}/* mods/
 [ $w10 ] && rm -rf mods/{jinja2,markupsafe}
 
 af() { awk "$1" <$2 >tf; mv tf "$2"; }
@@ -77,30 +86,38 @@ excl=(
     email._header_value_parser
     email.header
     email.parser
-    inspect
+    importlib.resources
+    importlib_resources
     multiprocessing
     packaging
     pdb
     pickle
+    pkg_resources
     PIL.EpsImagePlugin
     pyftpdlib.prefork
     urllib.request
     urllib.response
     urllib.robotparser
-    zipfile
 )
 [ $w10 ] && excl+=(
+    _pyrepl
+    distutils
+    setuptools
+    PIL._avif
     PIL.ImageQt
     PIL.ImageShow
     PIL.ImageTk
     PIL.ImageWin
     PIL.PdfParser
+    zipimport
 ) || excl+=(
+    inspect
     PIL
     PIL.ExifTags
     PIL.Image
     PIL.ImageDraw
     PIL.ImageOps
+    zipfile
 )
 excl=( "${excl[@]/#/--exclude-module }" )
 
@@ -118,4 +135,15 @@ base64 | head -c12 >> dist/copyparty.exe
 
 dist/copyparty.exe --version
 
-curl -fkT dist/copyparty.exe -b cppwd=wark https://192.168.123.1:3923/copyparty$esuf.exe
+csum=$(sha512sum <dist/copyparty.exe | cut -c-56)
+
+curl -fkT dist/copyparty.exe -HPW:wark https://192.168.123.1:3923/copyparty$esuf.exe >uplod.log
+cat uplod.log
+
+grep -q $csum uplod.log && echo upload OK || {
+    echo UPLOAD FAILED
+    exit 1
+}
+
+echo; read -u1 -n1 -p 'shutdown? y/n: '
+[ "$REPLY" = y ] && shutdown -s -t 1

@@ -5,30 +5,41 @@ if (!window.console || !console.log)
         "log": function (msg) { }
     };
 
+if (!Object.assign)
+    Object.assign = function (a, b) {
+        for (var k in b)
+            a[k] = b[k];
+    };
+
+if (window.CGV1)
+    Object.assign(window, window.CGV1);
 
 if (window.CGV)
-    for (var k in CGV)
-        window[k] = CGV[k];
+    Object.assign(window, window.CGV);
 
 
 var wah = '',
+    STG = null,
     NOAC = 'autocorrect="off" autocapitalize="off"',
     L, tt, treectl, thegrid, up2k, asmCrypto, hashwasm, vbar, marked,
-    CB = '?_=' + Date.now(),
+    T0 = Date.now(),
     R = SR.slice(1),
     RS = R ? "/" + R : "",
     HALFMAX = 8192 * 8192 * 8192 * 8192,
     HTTPS = ('' + location).indexOf('https:') === 0,
     TOUCH = 'ontouchstart' in window,
     MOBILE = TOUCH,
-    CHROME = !!window.chrome,
+    CHROME = !!window.chrome,  // safari=false
     VCHROME = CHROME ? 1 : 0,
-    IE = /Trident\//.test(navigator.userAgent),
-    FIREFOX = ('netscape' in window) && / rv:/.test(navigator.userAgent),
-    IPHONE = TOUCH && /iPhone|iPad|iPod/i.test(navigator.userAgent),
-    LINUX = /Linux/.test(navigator.userAgent),
-    MACOS = /[^a-z]mac ?os/i.test(navigator.userAgent),
-    WINDOWS = /Windows/.test(navigator.userAgent);
+    UA = '' + navigator.userAgent,
+    IE = !!document.documentMode,
+    FIREFOX = ('netscape' in window) && / rv:/.test(UA),
+    IPHONE = TOUCH && /iPhone|iPad|iPod/i.test(UA),
+    LINUX = /Linux/.test(UA),
+    MACOS = /Macintosh/.test(UA),
+    WINDOWS = /Windows/.test(UA),
+    APPLE = IPHONE || MACOS,
+    APPLEM = TOUCH && APPLE;
 
 if (!window.WebAssembly || !WebAssembly.Memory)
     window.WebAssembly = false;
@@ -40,8 +51,16 @@ if (!window.FormData)
     window.FormData = false;
 
 try {
-    CB = '?' + document.currentScript.src.split('?').pop();
+    STG = window.localStorage;
+    STG.STG;
+}
+catch (ex) {
+    STG = null;
+    if ((ex + '').indexOf('sandbox') < 0)
+        console.log('no localStorage: ' + ex);
+}
 
+try {
     if (navigator.userAgentData.mobile)
         MOBILE = true;
 
@@ -50,7 +69,7 @@ try {
 
     CHROME = navigator.userAgentData.brands.find(function (d) { return d.brand == 'Chromium' });
     if (CHROME)
-        VCHROME = CHROME.version;
+        VCHROME = parseInt(CHROME.version);
     else
         VCHROME = 0;
 
@@ -101,7 +120,7 @@ function esc(txt) {
 function basenames(txt) {
     return (txt + '').replace(/https?:\/\/[^ \/]+\//g, '/').replace(/js\?_=[a-zA-Z]{4}/g, 'js');
 }
-if ((document.location + '').indexOf(',rej,') + 1)
+if ((location + '').indexOf(',rej,') + 1)
     window.onunhandledrejection = function (e) {
         var err = e.reason;
         try {
@@ -118,13 +137,13 @@ if ((document.location + '').indexOf(',rej,') + 1)
 
 try {
     console.hist = [];
-    var CMAXHIST = 100;
+    var CMAXHIST = MOBILE ? 9000 : 44000;
     var hook = function (t) {
         var orig = console[t].bind(console),
             cfun = function () {
                 console.hist.push(Date.now() + ' ' + t + ': ' + Array.from(arguments).join(', '));
                 if (console.hist.length > CMAXHIST)
-                    console.hist = console.hist.slice(CMAXHIST / 2);
+                    console.hist = console.hist.slice(CMAXHIST / 4);
 
                 orig.apply(console, arguments);
             };
@@ -145,6 +164,10 @@ catch (ex) {
 }
 var crashed = false, ignexd = {}, evalex_fatal = false;
 function vis_exh(msg, url, lineNo, columnNo, error) {
+    var ekey = url + '\n' + lineNo + '\n' + msg;
+    if (ignexd[ekey] || crashed)
+        return;
+
     msg = String(msg);
     url = String(url);
 
@@ -157,14 +180,19 @@ function vis_exh(msg, url, lineNo, columnNo, error) {
     if (!/\.js($|\?)/.exec(url))
         return;  // chrome debugger
 
+    if (url.indexOf('extension://') + 1)
+        return;
+
     if (url.indexOf(' > eval') + 1 && !evalex_fatal)
         return;  // md timer
 
-    var ekey = url + '\n' + lineNo + '\n' + msg;
-    if (ignexd[ekey] || crashed)
+    if (url.indexOf('prism.js') + 1)
         return;
 
-    if (url.indexOf('deps/marked.js') + 1 && !window.WebAssembly)
+    if (url.indexOf('easymde.js') + 1)
+        return;  // clicking the preview pane
+
+    if (url.indexOf('deps/marked.js') + 1 && !WebAssembly)
         return; // ff<52
 
     crashed = true;
@@ -174,7 +202,7 @@ function vis_exh(msg, url, lineNo, columnNo, error) {
         '<p style="font-size:1.3em;margin:0;line-height:2em">try to <a href="#" onclick="localStorage.clear();location.reload();">reset copyparty settings</a> if you are stuck here, or <a href="#" onclick="ignex();">ignore this</a> / <a href="#" onclick="ignex(true);">ignore all</a> / <a href="?b=u">basic</a></p>',
         '<p style="color:#fff">please send me a screenshot arigathanks gozaimuch: <a href="<ghi>" target="_blank">new github issue</a></p>',
         '<p class="b">' + esc(url + ' @' + lineNo + ':' + columnNo), '<br />' + esc(msg).replace(/\n/g, '<br />') + '</p>',
-        '<p><b>UA:</b> ' + esc(navigator.userAgent + '')
+        '<p><b>UA:</b> ' + esc(UA)
     ];
 
     try {
@@ -202,19 +230,24 @@ function vis_exh(msg, url, lineNo, columnNo, error) {
         }
         ignexd[ekey] = true;
 
-        var ls = jcp(localStorage);
-        if (ls.fman_clip)
-            ls.fman_clip = ls.fman_clip.length + ' items';
+        var ls = {},
+            lsk = Object.keys(localStorage),
+            nka = lsk.length,
+            nk = Math.min(200, nka);
 
-        var lsk = Object.keys(ls);
-        lsk.sort();
-        html.push('<p class="b">');
-        for (var a = 0; a < lsk.length; a++) {
-            if (ls[lsk[a]].length > 9000)
-                continue;
+        for (var a = 0; a < nk; a++) {
+            var k = lsk[a],
+                v = localStorage.getItem(k);
 
-            html.push(' <b>' + esc(lsk[a]) + '</b> <code>' + esc(ls[lsk[a]]) + '</code> ');
+            ls[k] = v.length > 256 ? v.slice(0, 32) + '[...' + v.length + 'b]' : v;
         }
+
+        lsk = Object.keys(ls);
+        lsk.sort();
+        html.push('<p class="b"><b>' + nka + ':&nbsp;</b>');
+        for (var a = 0; a < nk; a++)
+            html.push(' <b>' + esc(lsk[a]) + '</b> <code>' + esc(ls[lsk[a]]) + '</code> ');
+
         html.push('</p>');
     }
     catch (e) { }
@@ -263,6 +296,10 @@ function ignex(all) {
 window.onerror = vis_exh;
 
 
+if (!window.Ls || !window.langmod)
+    var Ls = {};
+
+
 function noop() { }
 
 
@@ -276,10 +313,11 @@ function anymod(e, shift_ok) {
 }
 
 
+var dev_fbw = sread('dev_fbw');
 function ev(e) {
     if (!e && window.event) {
         e = window.event;
-        if (localStorage.dev_fbw == 1) {
+        if (dev_fbw == 1) {
             toast.warn(10, 'hello from fallback code ;_;\ncheck console trace');
             console.error('using window.event');
         }
@@ -333,7 +371,8 @@ if (!Element.prototype.matches)
         Element.prototype.mozMatchesSelector ||
         Element.prototype.webkitMatchesSelector;
 
-if (!Element.prototype.closest)
+var CLOSEST = !!Element.prototype.closest;
+if (!CLOSEST)
     Element.prototype.closest = function (s) {
         var el = this;
         do {
@@ -351,8 +390,10 @@ if (!String.prototype.format)
         });
     };
 
+var have_URL = false;
 try {
     new URL('/a/', 'https://a.com/');
+    have_URL = true;
 }
 catch (ex) {
     console.log('ie11 shim URL()');
@@ -369,6 +410,22 @@ catch (ex) {
         };
     }
 }
+
+if (!window.Set)
+    window.Set = function () {
+        var r = this;
+        r.size = 0;
+        r.d = {};
+        r.add = function (k) {
+            if (!r.d[k]) {
+                r.d[k] = 1;
+                r.size++;
+            }
+        };
+        r.has = function (k) {
+            return r.d[k];
+        };
+    };
 
 // https://stackoverflow.com/a/950146
 function import_js(url, cb, ecb) {
@@ -387,12 +444,38 @@ function import_js(url, cb, ecb) {
 
 
 function unsmart(txt) {
-    return !IPHONE ? txt : (txt.
+    return !APPLEM ? txt : (txt.
         replace(/[\u2014]/g, "--").
         replace(/[\u2022]/g, "*").
         replace(/[\u2018\u2019]/g, "'").
         replace(/[\u201c\u201d]/g, '"'));
 }
+
+
+function namesan(txt, win, fslash) {
+    if (win)
+        txt = (txt.
+            replace(/</g, "＜").
+            replace(/>/g, "＞").
+            replace(/:/g, "：").
+            replace(/"/g, "＂").
+            replace(/\\/g, "＼").
+            replace(/\|/g, "｜").
+            replace(/\?/g, "？").
+            replace(/\*/g, "＊"));
+
+    if (fslash)
+        txt = txt.replace(/\//g, "／");
+
+    return txt;
+}
+
+
+var NATSORT, ENATSORT;
+try {
+    NATSORT = new Intl.Collator([], {numeric: true});
+}
+catch (ex) { }
 
 
 var crctab = (function () {
@@ -414,6 +497,24 @@ function crc32(str) {
         crc = (crc >>> 8) ^ crctab[(crc ^ str.charCodeAt(i)) & 0xFF];
     }
     return ((crc ^ (-1)) >>> 0).toString(16);
+}
+
+
+function randstr(len) {
+    var ret = '';
+    try {
+        var ar = new Uint32Array(Math.floor((len + 3) / 4));
+        crypto.getRandomValues(ar);
+        for (var a = 0; a < ar.length; a++)
+            ret += ('000' + ar[a].toString(36)).slice(-4);
+        return ret.slice(0, len);
+    }
+    catch (ex) {
+        console.log('using unsafe randstr because ' + ex);
+        while (ret.length < len)
+            ret += ('000' + Math.floor(Math.random() * 1679616).toString(36)).slice(-4);
+        return ret.slice(0, len);
+    }
 }
 
 
@@ -461,6 +562,14 @@ function clgot(el, cls) {
 }
 
 
+function setcvar(k, v) {
+    try {
+        document.documentElement.style.setProperty(k, v);
+    }
+    catch (e) { }
+}
+
+
 var ANIM = true;
 try {
     var mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -489,7 +598,9 @@ function yscroll() {
 
 function showsort(tab) {
     var v, vn, v1, v2, th = tab.tHead,
-        sopts = jread('fsort', jcp(dsort));
+        sopts = jread('fsort');
+
+    sopts = sopts && sopts.length ? sopts : dsort;
 
     th && (th = th.rows[0]) && (th = th.cells);
 
@@ -520,16 +631,46 @@ function showsort(tab) {
         }
     }
 }
+function st_cmp_num(a, b) {
+    a = a[0];
+    b = b[0];
+    return (
+        a === null ? -1 :
+        b === null ? 1 :
+        (a - b)
+    );
+}
+function st_cmp_nat(a, b) {
+    a = a[0];
+    b = b[0];
+    return (
+        a === null ? -1 :
+        b === null ? 1 :
+        NATSORT.compare(a, b)
+    );
+}
+function st_cmp_gen(a, b) {
+    a = a[0];
+    b = b[0];
+    return (
+        a === null ? -1 :
+        b === null ? 1 :
+        a.localeCompare(b)
+    );
+}
 function sortTable(table, col, cb) {
     var tb = table.tBodies[0],
         th = table.tHead.rows[0].cells,
         tr = Array.prototype.slice.call(tb.rows, 0),
         i, reverse = /s0[^r]/.exec(th[col].className + ' ') ? -1 : 1;
 
-    var stype = th[col].getAttribute('sort');
+    var kname = th[col].getAttribute('name'),
+        stype = th[col].getAttribute('sort');
     try {
-        var nrules = [], rules = jread("fsort", []);
-        rules.unshift([th[col].getAttribute('name'), reverse, stype || '']);
+        var nrules = [],
+            rules = kname == 'href' ? [] : jread("fsort", []);
+
+        rules.unshift([kname, reverse, stype || '']);
         for (var a = 0; a < rules.length; a++) {
             var add = true;
             for (var b = 0; b < a; b++)
@@ -562,19 +703,17 @@ function sortTable(table, col, cb) {
         }
         vl.push([v, a]);
     }
-    vl.sort(function (a, b) {
-        a = a[0];
-        b = b[0];
-        if (a === null)
-            return -1;
-        if (b === null)
-            return 1;
 
-        if (stype == 'int') {
-            return reverse * (a - b);
-        }
-        return reverse * (a.localeCompare(b));
-    });
+    if (stype == 'int')
+        vl.sort(st_cmp_num);
+    else if (ENATSORT)
+        vl.sort(st_cmp_nat);
+    else
+        vl.sort(st_cmp_gen);
+
+    if (reverse < 0)
+        vl.reverse();
+
     if (sread('dir1st') !== '0') {
         var r1 = [], r2 = [];
         for (var i = 0; i < tr.length; i++) {
@@ -599,6 +738,16 @@ function makeSortable(table, cb) {
             sortTable(table, i, cb);
         };
     }(i));
+}
+
+
+function assert_vp(path) {
+    if (path.indexOf('//') + 1)
+        throw 'nonlocal1: ' + path;
+
+    var o = location.origin;
+    if (have_URL && (new URL(path, o)).origin != o)
+        throw 'nonlocal2: ' + path;
 }
 
 
@@ -681,6 +830,15 @@ function vjoin(p1, p2) {
 }
 
 
+function addq(url, q) {
+    var uh = url.split('#', 1),
+        u = uh[0],
+        h = uh.length == 1 ? '' : '#' + uh[1];
+
+    return u + (u.indexOf('?') < 0 ? '?' : '&') + (q === undefined ? '' : q) + h;
+}
+
+
 function uricom_enc(txt, do_fb_enc) {
     try {
         return encodeURIComponent(txt);
@@ -739,7 +897,7 @@ function uricom_adec(arr, li) {
 
 
 function get_evpath() {
-    var ret = document.location.pathname;
+    var ret = location.pathname;
 
     if (ret.indexOf('/') !== 0)
         ret = '/' + ret;
@@ -751,18 +909,31 @@ function get_evpath() {
 }
 
 
-function get_vpath() {
-    return uricom_dec(get_evpath());
-}
-
-
 function noq_href(el) {
     return el.getAttribute('href').split('?')[0];
 }
 
 
+function pad2(v) {
+    return ('0' + v).slice(-2);
+}
+
+
 function unix2iso(ts) {
     return new Date(ts * 1000).toISOString().replace("T", " ").slice(0, -5);
+}
+
+
+function unix2iso_localtime(ts) {
+    var o = new Date(ts * 1000),
+        p = pad2;
+    return "{0}-{1}-{2} {3}:{4}:{5}".format(
+        o.getFullYear(),
+        p(o.getMonth() + 1),
+        p(o.getDate()),
+        p(o.getHours()),
+        p(o.getMinutes()),
+        p(o.getSeconds()));
 }
 
 
@@ -783,20 +954,105 @@ if (window.Number && Number.isFinite)
 
 function f2f(val, nd) {
     // 10.toFixed(1) returns 10.00 for certain values of 10
+    if (!isNum(val)) {
+        val = parseFloat(val);
+        if (!isNum(val))
+            val = 999;
+    }
     val = (val * Math.pow(10, nd)).toFixed(0).split('.')[0];
     return nd ? (val.slice(0, -nd) || '0') + '.' + val.slice(-nd) : val;
 }
 
 
+var HSZ_U = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
 function humansize(b, terse) {
-    var i = 0, u = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-    while (b >= 1000 && i < u.length - 1) {
-        b /= 1024;
-        i += 1;
-    }
+    var i = 0;
+    while (b >= 1000 && i < 5) { b /= 1024; i += 1; }
     return (f2f(b, b >= 100 ? 0 : b >= 10 ? 1 : 2) +
-        ' ' + (terse ? u[i].charAt(0) : u[i]));
+        ' ' + (terse ? HSZ_U[i].charAt(0) : HSZ_U[i]));
 }
+function humansize_su(b) {
+    var i = 0;
+    while (b >= 1000 && i < 5) { b /= 1024; i += 1; }
+    return [b, HSZ_U[i]];
+}
+function humansize_0(b) {
+    return '' + b;
+}
+function humansize_1(b) {
+    return ('' + b).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+function humansize_2g(b) {
+    var z = humansize_su(b), u = z[1].charAt(0); b = z[0];
+    return [f2f(b, b >= 100 ? 0 : b >= 10 ? 1 : 2) + ' ' + u, u];
+}
+function humansize_3g(b) {
+    var z = humansize_su(b), u = z[1].charAt(0); b = z[0];
+    return [f2f(b, b >= 10 ? 0 : 1) + ' ' + u, u];
+}
+function humansize_4g(b) {
+    var z = humansize_su(b), u = z[1]; b = z[0];
+    return [parseFloat(b.toFixed(b >= 100 ? 0 : b >= 10 ? 1 : 2)) + ' ' + u, u.charAt(0)];
+}
+function humansize_5g(b) {
+    var z = humansize_su(b), u = z[1]; b = z[0];
+    return [parseFloat(b.toFixed(b >= 10 ? 0 : 1)) + ' ' + u, u.charAt(0)];
+}
+function humansize_2(b) {
+    return humansize_2g(b)[0];
+}
+function humansize_3(b) {
+    return humansize_3g(b)[0];
+}
+function humansize_4(b) {
+    return humansize_4g(b)[0];
+}
+function humansize_5(b) {
+    return humansize_5g(b)[0];
+}
+function humansize_2c(b) {
+    var v = humansize_2g(b);
+    return '<span class="fsz_' + v[1].charAt(0) + '">' + v[0] + '</span>';
+}
+function humansize_3c(b) {
+    var v = humansize_3g(b);
+    return '<span class="fsz_' + v[1].charAt(0) + '">' + v[0] + '</span>';
+}
+function humansize_4c(b) {
+    var v = humansize_4g(b);
+    return '<span class="fsz_' + v[1].charAt(0) + '">' + v[0] + '</span>';
+}
+function humansize_5c(b) {
+    var v = humansize_5g(b);
+    return '<span class="fsz_' + v[1].charAt(0) + '">' + v[0] + '</span>';
+}
+function humansize_fuzzy(b) {
+    if (b <= 0) return "yes";
+	if (b <= 80) return "hullkort";
+	if (b <= 368640) return "5¼ DD";
+	if (b <= 1474560) return "save icon";
+	if (b <= 2880000) return "3½ Extended";
+	if (b <= 13107200) return "C90 Tape";
+	if (b <= 21000000) return "Floptical";
+	if (b <= 33554432) return "MPMan F10";
+	if (b <= 50000000) return "creditcardCD";
+	if (b <= 100663296) return "Zipdisk";
+	if (b <= 170000000) return "MD";
+	if (b <= 220200960) return "8cm CD";
+	if (b <= 737280000) return "CD-R";
+	if (b <= 900000000) return "UMD";
+	if (b <= 1300000000) return "GD-ROM";
+	if (b <= 4700000000) return "DVD";
+	if (b <= 9400000000) return "DVD-DL";
+	if (b <= 25025000000) return "BluRei";
+	if (b <= 50050000000) return "BD-DL";
+	return "LTO";
+}
+var humansize_fmts = ['0', '1', '2', '2c', '3', '3c', '4', '4c', '5', '5c', 'fuzzy'];
+window.filesizefun = (function () {
+    var v = sread('fszfmt', humansize_fmts);
+    return window['humansize_' + (v || window.dfszf)] || humansize_1;
+})();
 
 
 function humantime(v) {
@@ -839,15 +1095,22 @@ function shumantime(v, long) {
 
 
 function lhumantime(v) {
-    var t = shumantime(v, 1),
-        tp = t.replace(/([a-z])/g, " $1 ").split(/ /g).slice(0, -1);
+    var t = shumantime(v, 1);
+    if (/[0-9]$/.exec(t))
+        t += 's';
+
+    var tp = t.replace(/([a-z])/g, " $1 ").split(/ /g).slice(0, -1);
 
     if (!L || tp.length < 2 || tp[1].indexOf('$') + 1)
         return t;
 
-    var ret = '';
-    for (var a = 0; a < tp.length; a += 2)
-        ret += tp[a] + ' ' + L['ht_' + tp[a + 1]].replace(tp[a] == 1 ? /!.*/ : /!/, '') + L.ht_and;
+    var u, n, ret = '';
+    for (var a = 0; a < tp.length; a += 2) {
+        n = tp[a];
+        u = L.ht_h5 ? (n==1 ? 1 : (n>1&&n<5) ? 2 : 5) :
+            (n==1 ? 1 : 2);
+        ret += tp[a] + ' ' + L['ht_' + tp[a + 1] + u] + L.ht_and;
+    }
 
     return ret.slice(0, -L.ht_and.length);
 }
@@ -876,14 +1139,43 @@ function apop(arr, v) {
 }
 
 
-function jcp(obj) {
+function jcp1(obj) {
     return JSON.parse(JSON.stringify(obj));
 }
 
 
+function jcp2(src) {
+    if (Array.isArray(src)) {
+        var ret = [];
+        for (var a = 0; a < src.length; ++a) {
+            var sub = src[a];
+            ret.push((sub === null) ? sub : (sub instanceof Date) ? new Date(sub.valueOf()) : (typeof sub === 'object') ? jcp2(sub) : sub);
+        }
+    } else {
+        var ret = {};
+        for (var key in src) {
+            var sub = src[key];
+            ret[key] = sub === null ? sub : (sub instanceof Date) ? new Date(sub.valueOf()) : (typeof sub === 'object') ? jcp2(sub) : sub;
+        }
+    }
+    return ret;
+};
+
+
+// jcp1 50% faster on android-chrome, jcp2 7x everywhere else
+var jcp = MOBILE && CHROME ? jcp1 : jcp2;
+
+
+function sdrop(key) {
+    try {
+        STG.removeItem(key);
+    }
+    catch (ex) { }
+}
+
 function sread(key, al) {
     try {
-        var ret = localStorage.getItem(key);
+        var ret = STG.getItem(key);
         return (!al || has(al, ret)) ? ret : null;
     }
     catch (e) {
@@ -894,9 +1186,9 @@ function sread(key, al) {
 function swrite(key, val) {
     try {
         if (val === undefined || val === null)
-            localStorage.removeItem(key);
+            STG.removeItem(key);
         else
-            localStorage.setItem(key, val);
+            STG.setItem(key, val);
     }
     catch (e) { }
 }
@@ -1019,6 +1311,18 @@ function scfg_bind(obj, oname, cname, defval, cb) {
     return v;
 }
 
+function setck(v) {
+    var xhr = new XHR();
+    xhr.open('GET', SR + '/?setck=' + v, true);
+    xhr.send();
+}
+
+window.unix2ui = (function () {
+    var v = sread('utctid');
+    v = v ? (v === '0') : (window.dutc === false);
+    return v ? unix2iso_localtime : unix2iso;
+})();
+
 
 function hist_push(url) {
     console.log("h-push " + url);
@@ -1038,27 +1342,30 @@ function hist_replace(url) {
 
 function sethash(hv) {
     if (window.history && history.replaceState) {
-        hist_replace(document.location.pathname + document.location.search + '#' + hv);
+        hist_replace(location.pathname + location.search + '#' + hv);
     }
     else {
-        document.location.hash = hv;
+        location.hash = hv;
     }
 }
 
 
 function dl_file(url) {
     console.log('DL [%s]', url);
-    var o = mknod('a');
+    qsr('#dlfth');
+    var o = mknod('a', 'dlfth');
     o.setAttribute('href', url);
     o.setAttribute('download', '');
-    o.click();
+    document.body.appendChild(o);
+    ebi('dlfth').click();
+    qsr('#dlfth');
 }
 
 
 function cliptxt(txt, ok) {
     var fb = function () {
-        console.log('fb');
-        var o = mknod('input');
+        console.log('clip-fb');
+        var o = mknod('textarea');
         o.value = txt;
         document.body.appendChild(o);
         o.focus();
@@ -1068,6 +1375,8 @@ function cliptxt(txt, ok) {
         ok();
     };
     try {
+        if (!window.isSecureContext)
+            throw 1;
         navigator.clipboard.writeText(txt).then(ok, fb);
     }
     catch (ex) { fb(); }
@@ -1178,7 +1487,7 @@ var tt = (function () {
     var r = {
         "tt": mknod("div", 'tt'),
         "th": mknod("div", 'tth'),
-        "en": true,
+        "en": !window.notooltips,
         "el": null,
         "skip": false,
         "lvis": 0
@@ -1216,7 +1525,7 @@ var tt = (function () {
     };
 
     r.getmsg = function (el) {
-        if (IPHONE && QS('body.bbox-open'))
+        if (APPLEM && QS('body.bbox-open'))
             return;
 
         var cfg = sread('tooltips');
@@ -1324,10 +1633,10 @@ var tt = (function () {
             o = ctr.querySelectorAll('*[tt]');
 
         for (var a = o.length - 1; a >= 0; a--) {
-            o[a].onfocus = _cshow;
-            o[a].onblur = _hide;
-            o[a].onmouseenter = _dshow;
-            o[a].onmouseleave = _hide;
+            o[a].addEventListener('focus', _cshow);
+            o[a].addEventListener('blur', _hide);
+            o[a].addEventListener('mouseenter', _dshow);
+            o[a].addEventListener('mouseleave', _hide);
         }
         r.hide();
     }
@@ -1351,8 +1660,11 @@ function lf2br(txt) {
 }
 
 
-function unpre(txt) {
+function hunpre(txt) {
     return ('' + txt).replace(/^<pre>/, '');
+}
+function unpre(txt) {
+    return esc(hunpre(txt));
 }
 
 
@@ -1392,15 +1704,23 @@ var toast = (function () {
     }
 
     r.hide = function (e) {
-        ev(e);
+        if (this === ebi('toastc'))
+            ev(e);
+
         unscroll();
         clearTimeout(te);
         clmod(obj, 'vis');
         r.visible = false;
         r.tag = obj;
+        if (!WebAssembly)
+            te = setTimeout(function () {
+                obj.className = 'hide';
+            }, 500);
     };
 
     r.show = function (cl, sec, txt, tag) {
+        txt = (txt + '').slice(0, 16384);
+
         var same = r.visible && txt == r.p_txt && r.p_sec == sec,
             delta = Date.now() - r.p_t;
 
@@ -1415,13 +1735,26 @@ var toast = (function () {
         if (sec)
             te = setTimeout(r.hide, sec * 1000);
 
-        if (same && delta < 1000)
+        if (same && delta < 1000) {
+            var tb = ebi('toastt');
+            if (tb) {
+                tb.style.animation = 'none';
+                tb.offsetHeight;
+                tb.style.animation = null;
+            }
             return;
+        }
 
         if (txt.indexOf('<body>') + 1)
             txt = txt.slice(0, txt.indexOf('<')) + ' [...]';
 
-        obj.innerHTML = '<a href="#" id="toastc">x</a><div id="toastb">' + lf2br(txt) + '</div>';
+        var html = '';
+        if (sec) {
+            setcvar('--tmtime', (sec - 0.15) + 's');
+            setcvar('--tmstep', Math.floor(sec * 20));
+            html += '<div id="toastt"></div>';
+        }
+        obj.innerHTML = html + '<a href="#" id="toastc">x</a><div id="toastb">' + lf2br(txt) + '</div>';
         obj.className = cl;
         sec += obj.offsetWidth;
         obj.className += ' vis';
@@ -1453,9 +1786,12 @@ var modal = (function () {
     var r = {},
         q = [],
         o = null,
+        scrolling = null,
         cb_up = null,
         cb_ok = null,
         cb_ng = null,
+        sel_0 = 0,
+        sel_1 = 0,
         tok, tng, prim, sec, ok_cancel;
 
     r.load = function () {
@@ -1471,6 +1807,7 @@ var modal = (function () {
     r.nofocus = 0;
 
     r.show = function (html) {
+        tt.hide();
         o = mknod('div', 'modal');
         o.innerHTML = '<table><tr><td><div id="modalc">' + html + '</div></td></tr></table>';
         document.body.appendChild(o);
@@ -1489,11 +1826,12 @@ var modal = (function () {
         (inp || a).focus();
         if (inp)
             setTimeout(function () {
-                inp.setSelectionRange(0, inp.value.length, "forward");
+                inp.setSelectionRange(sel_0, sel_1, "forward");
             }, 0);
 
         document.addEventListener('focus', onfocus);
         document.addEventListener('selectionchange', onselch);
+        timer.add(scrollchk, 1);
         timer.add(onfocus);
         if (cb_up)
             setTimeout(cb_up, 1);
@@ -1501,6 +1839,8 @@ var modal = (function () {
 
     r.hide = function () {
         timer.rm(onfocus);
+        timer.rm(scrollchk);
+        scrolling = null;
         try {
             ebi('modal-ok').removeEventListener('blur', onblur);
         }
@@ -1519,13 +1859,28 @@ var modal = (function () {
         r.hide();
         if (cb_ok)
             cb_ok(v);
-    }
+    };
     var ng = function (e) {
         ev(e);
         r.hide();
         if (cb_ng)
             cb_ng(null);
-    }
+    };
+
+    var scrollchk = function () {
+        if (scrolling === true)
+            return;
+
+        var o = ebi('modalc'),
+            vis = o.offsetHeight,
+            all = o.scrollHeight,
+            nsc = 8 + vis < all;
+
+        if (scrolling !== nsc)
+            clmod(o, 'yk', !nsc);
+
+        scrolling = nsc;
+    };
 
     var onselch = function () {
         try {
@@ -1558,12 +1913,12 @@ var modal = (function () {
     };
 
     var onkey = function (e) {
-        var k = e.code,
+        var k = (e.key || e.code) + '',
             eok = ebi('modal-ok'),
             eng = ebi('modal-ng'),
             ae = document.activeElement;
 
-        if (k == 'Space' && ae && (ae === eok || ae === eng))
+        if ((k == 'Space' || k == 'Spacebar' || k == ' ') && ae && (ae === eok || ae === eng))
             k = 'Enter';
 
         if (k.endsWith('Enter')) {
@@ -1573,10 +1928,10 @@ var modal = (function () {
             return ok(e);
         }
 
-        if ((k == 'ArrowLeft' || k == 'ArrowRight') && eng && (ae == eok || ae == eng))
+        if ((k == 'ArrowLeft' || k == 'ArrowRight' || k == 'Left' || k == 'Right') && eng && (ae == eok || ae == eng))
             return (ae == eok ? eng : eok).focus() || ev(e);
 
-        if (k == 'Escape')
+        if (k == 'Escape' || k == 'Esc')
             return ng(e);
     }
 
@@ -1612,16 +1967,18 @@ var modal = (function () {
         r.show(html);
     }
 
-    r.prompt = function (html, v, cok, cng, fun) {
+    r.prompt = function (html, v, cok, cng, fun, so0, so1) {
         q.push(function () {
-            _prompt(lf2br(html), v, cok, cng, fun);
+            _prompt(lf2br(html), v, cok, cng, fun, so0, so1);
         });
         next();
     }
-    var _prompt = function (html, v, cok, cng, fun) {
+    var _prompt = function (html, v, cok, cng, fun, so0, so1) {
         cb_ok = cok;
         cb_ng = cng === undefined ? cok : null;
         cb_up = fun;
+        sel_0 = so0 || 0;
+        sel_1 = so1 === undefined ? v.length : so1;
         html += '<input id="modali" type="text" ' + NOAC + ' /><div id="modalb">' + ok_cancel + '</div>';
         r.show(html);
 
@@ -1808,7 +2165,7 @@ function md_thumbs(md) {
             float = has(flags, 'l') ? 'left' : has(flags, 'r') ? 'right' : '';
 
         if (!/[?&]cache/.exec(url))
-            url += (url.indexOf('?') < 0 ? '?' : '&') + 'cache=i';
+            url = addq(url, 'cache=i');
 
         md[a] = '<a href="' + url + '" class="mdth mdth' + float.slice(0, 1) + '"><img src="' + url + '&th=w" alt="' + alt + '" /></a>' + md[a].slice(o2 + 1);
     }
@@ -1854,21 +2211,17 @@ var favico = (function () {
         var b64;
         try {
             b64 = btoa(svg ? svg_decl + svg : gx(r.txt));
-            //console.log('f1');
         }
         catch (e1) {
             try {
                 b64 = btoa(gx(encodeURIComponent(r.txt).replace(/%([0-9A-F]{2})/g,
                     function x(m, v) { return String.fromCharCode('0x' + v); })));
-                //console.log('f2');
             }
             catch (e2) {
                 try {
                     b64 = btoa(gx(unescape(encodeURIComponent(r.txt))));
-                    //console.log('f3');
                 }
                 catch (e3) {
-                    //console.log('fe');
                     return;
                 }
             }
@@ -1917,20 +2270,45 @@ function bchrome() {
 }
 bchrome();
 
+var XC_CMSG = {
+    502: "bad gateway (server offline)",
+    503: "server offline",
+    504: "gateway timeout (server busy)",
+    529: "gateway timeout (server busy)",
+    520: "unknown error from server",
+    521: "server offline",
+    523: "server offline",
+    522: "proxy timeout (server busy)",
+    524: "proxy timeout (server busy)",
+    598: "proxy timeout (server busy)",
+    599: "proxy timeout (server busy)",
+};
 var cf_cha_t = 0;
 function xhrchk(xhr, prefix, e404, lvl, tag) {
     if (xhr.status < 400 && xhr.status >= 200)
         return true;
 
-    var errtxt = (xhr.response && xhr.response.err) || xhr.responseText,
+    if (tag === undefined)
+        tag = prefix;
+
+    var errtxt = ((xhr.response && xhr.response.err) || xhr.responseText) || '',
+        suf = '',
         fun = toast[lvl || 'err'],
         is_cf = /[Cc]loud[f]lare|>Just a mo[m]ent|#cf-b[u]bbles|Chec[k]ing your br[o]wser|\/chall[e]nge-platform|"chall[e]nge-error|nable Ja[v]aScript and cook/.test(errtxt);
 
+    if (errtxt.startsWith('<pre>'))
+        suf = '\n\nerror-details: «' + unpre(errtxt).split('\n')[0].trim() + '»';
+    else
+        errtxt = esc(errtxt).slice(0, 32768);
+
     if (xhr.status == 403 && !is_cf)
-        return toast.err(0, prefix + (L && L.xhr403 || "403: access denied\n\ntry pressing F5, maybe you got logged out"), tag);
+        return toast.err(0, prefix + (L && L.xhr403 || "403: access denied\n\ntry pressing F5, maybe you got logged out") + suf, tag);
 
     if (xhr.status == 404)
-        return toast.err(0, prefix + e404, tag);
+        return toast.err(0, prefix + e404 + suf, tag);
+
+    if (!xhr.status && !errtxt)
+        return toast.err(0, prefix + L.xhr0);
 
     if (is_cf && (xhr.status == 403 || xhr.status == 503)) {
         var now = Date.now(), td = now - cf_cha_t;
@@ -1946,6 +2324,9 @@ function xhrchk(xhr, prefix, e404, lvl, tag) {
         fr.src = SR + '/?cf_challenge';
         document.body.appendChild(fr);
     }
+
+    if (XC_CMSG[xhr.status] && (errtxt.indexOf('<html') + 1))
+        errtxt = XC_CMSG[xhr.status];
 
     return fun(0, prefix + xhr.status + ": " + errtxt, tag);
 }

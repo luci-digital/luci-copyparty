@@ -4,11 +4,11 @@ from __future__ import print_function, unicode_literals
 import calendar
 import stat
 import time
-import zlib
 
+from .authsrv import AuthSrv
 from .bos import bos
 from .sutil import StreamArc, errdesc
-from .util import min_ex, sanitize_fn, spack, sunpack, yieldfile
+from .util import min_ex, sanitize_fn, spack, sunpack, yieldfile, zlib
 
 if True:  # pylint: disable=using-constant-test
     from typing import Any, Generator, Optional
@@ -36,9 +36,7 @@ def dostime2unix(buf: bytes) -> int:
 
 
 def unixtime2dos(ts: int) -> bytes:
-    tt = time.gmtime(ts + 1)
-    dy, dm, dd, th, tm, ts = list(tt)[:6]
-
+    dy, dm, dd, th, tm, ts, _, _, _ = time.gmtime(ts + 1)
     bd = ((dy - 1980) << 9) + (dm << 5) + dd
     bt = (th << 11) + (tm << 5) + ts // 2
     try:
@@ -56,6 +54,7 @@ def gen_fdesc(sz: int, crc32: int, z64: bool) -> bytes:
 
 def gen_hdr(
     h_pos: Optional[int],
+    z64: bool,
     fn: str,
     sz: int,
     lastmod: int,
@@ -72,7 +71,6 @@ def gen_hdr(
     # appnote 4.5 / zip 3.0 (2008) / unzip 6.0 (2009) says to add z64
     # extinfo for values which exceed H, but that becomes an off-by-one
     # (can't tell if it was clamped or exactly maxval), make it obvious
-    z64 = sz >= 0xFFFFFFFF
     z64v = [sz, sz] if z64 else []
     if h_pos and h_pos >= 0xFFFFFFFF:
         # central, also consider ptr to original header
@@ -101,12 +99,12 @@ def gen_hdr(
 
     # spec says to put zeros when !crc if bit3 (streaming)
     # however infozip does actual sz and it even works on winxp
-    # (same reasning for z64 extradata later)
+    # (same reasoning for z64 extradata later)
     vsz = 0xFFFFFFFF if z64 else sz
     ret += spack(b"<LL", vsz, vsz)
 
     # windows support (the "?" replace below too)
-    fn = sanitize_fn(fn, "/", [])
+    fn = sanitize_fn(fn, "/")
     bfn = fn.encode("utf-8" if utf8 else "cp437", "replace").replace(b"?", b"_")
 
     # add ntfs (0x24) and/or unix (0x10) extrafields for utc, add z64 if requested
@@ -218,12 +216,13 @@ class StreamZip(StreamArc):
     def __init__(
         self,
         log: "NamedLogger",
+        asrv: AuthSrv,
         fgen: Generator[dict[str, Any], None, None],
         utf8: bool = False,
         pre_crc: bool = False,
         **kwargs: Any
     ) -> None:
-        super(StreamZip, self).__init__(log, fgen)
+        super(StreamZip, self).__init__(log, asrv, fgen)
 
         self.utf8 = utf8
         self.pre_crc = pre_crc
@@ -245,19 +244,24 @@ class StreamZip(StreamArc):
 
         sz = st.st_size
         ts = st.st_mtime
+        h_pos = self.pos
 
         crc = 0
         if self.pre_crc:
-            for buf in yieldfile(src):
+            for buf in yieldfile(src, self.args.iobuf):
                 crc = zlib.crc32(buf, crc)
 
             crc &= 0xFFFFFFFF
 
-        h_pos = self.pos
-        buf = gen_hdr(None, name, sz, ts, self.utf8, crc, self.pre_crc)
+        # some unzip-programs expect a 64bit data-descriptor
+        # even if the only 32bit-exceeding value is the offset,
+        # so force that by placeholdering the filesize too
+        z64 = h_pos >= 0xFFFFFFFF or sz >= 0xFFFFFFFF
+
+        buf = gen_hdr(None, z64, name, sz, ts, self.utf8, crc, self.pre_crc)
         yield self._ct(buf)
 
-        for buf in yieldfile(src):
+        for buf in yieldfile(src, self.args.iobuf):
             if not self.pre_crc:
                 crc = zlib.crc32(buf, crc)
 
@@ -266,8 +270,6 @@ class StreamZip(StreamArc):
         crc &= 0xFFFFFFFF
 
         self.items.append((name, sz, ts, crc, h_pos))
-
-        z64 = sz >= 4 * 1024 * 1024 * 1024
 
         if z64 or not self.pre_crc:
             buf = gen_fdesc(sz, crc, z64)
@@ -300,14 +302,15 @@ class StreamZip(StreamArc):
                 mbuf = b""
 
             if errors:
-                errf, txt = errdesc(errors)
+                errf, txt = errdesc(self.asrv.vfs, errors)
                 self.log("\n".join(([repr(errf)] + txt[1:])))
                 for x in self.ser(errf):
                     yield x
 
             cdir_pos = self.pos
             for name, sz, ts, crc, h_pos in self.items:
-                buf = gen_hdr(h_pos, name, sz, ts, self.utf8, crc, self.pre_crc)
+                z64 = h_pos >= 0xFFFFFFFF or sz >= 0xFFFFFFFF
+                buf = gen_hdr(h_pos, z64, name, sz, ts, self.utf8, crc, self.pre_crc)
                 mbuf += self._ct(buf)
                 if len(mbuf) >= 16384:
                     yield mbuf

@@ -12,6 +12,23 @@ almost the same as minimal-up2k.html except this one...:
 
  -- looks slightly better
 
+
+========================
+== USAGE INSTRUCTIONS ==
+
+1. create a volume which anyone can read from (if you haven't already)
+2. copy this file into that volume, so anyone can download it
+3. enable the plugin by telling the webbrowser to load this file;
+    assuming the URL to the public volume is /res/, and
+    assuming you're using config-files, then add this to your config:
+
+    [global]
+      js-browser: /res/minimal-up2k.js
+
+alternatively, if you're not using config-files, then
+add the following commandline argument instead:
+  --js-browser=/res/minimal-up2k.js
+
 */
 
 var u2min = `

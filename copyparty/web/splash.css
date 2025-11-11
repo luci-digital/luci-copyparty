@@ -2,6 +2,7 @@ html {
 	color: #333;
 	background: #f7f7f7;
 	font-family: sans-serif;
+	font-family: var(--font-main), sans-serif;
 	touch-action: manipulation;
 }
 #wrap {
@@ -23,6 +24,7 @@ h1 {
 li {
 	margin: 1em 0;
 }
+#lo,
 a {
 	color: #047;
 	background: #fff;
@@ -36,6 +38,7 @@ a {
 td a {
 	margin: 0;
 }
+#wb,
 #w {
 	color: #fff;
 	background: #940;
@@ -46,13 +49,14 @@ td a {
 	float: right;
 	margin: -.2em 0 0 .8em;
 }
+#lo,
 .logout,
 a.r {
 	color: #c04;
 	border-color: #c7a;
 }
 a.g {
-	color: #2b0;
+	color: #0a0;
 	border-color: #3a0;
 	box-shadow: 0 .3em 1em #4c0;
 }
@@ -89,6 +93,13 @@ table {
 	text-align: left;
 	white-space: nowrap;
 }
+.vols td:empty,
+.vols th:empty {
+	padding: 0;
+}
+.vols img {
+	margin: -4px 0;
+}
 .num {
 	border-right: 1px solid #bbb;
 }
@@ -106,6 +117,26 @@ table {
 }
 .btns>a:first-child {
 	margin-left: 0;
+}
+.agr br {
+	display: none;
+}
+#lo,
+.agr a,
+.agr form {
+	margin: 0 .5em 0 0;
+	line-height: 4em;
+}
+.agr form,
+.agr input {
+	display: inline;
+	padding: 0;
+	margin: 0;
+}
+#lo,
+.agr input {
+	line-height: 1em;
+	font-weight: normal;
 }
 #msg {
 	margin: 3em 0;
@@ -127,6 +158,7 @@ pre, code {
 	color: #480;
 	background: #fff;
 	font-family: 'scp', monospace, monospace;
+	font-family: var(--font-mono), 'scp', monospace, monospace;
 	border: 1px solid rgba(128,128,128,0.3);
 	border-radius: .2em;
 	padding: .15em .2em;
@@ -150,11 +182,13 @@ pre b,
 code b {
 	color: #000;
 	font-weight: normal;
-	text-shadow: 0 0 .2em #0f0;
+	text-shadow: 0 0 .2em #3f3;
+	border-bottom: 1px solid #090;
 }
 html.z pre b,
 html.z code b {
 	color: #fff;
+	border-bottom: 1px solid #9f9;
 }
 
 
@@ -165,12 +199,14 @@ html.z {
 html.z h1 {
 	border-color: #777;
 }
+html.z #lo,
 html.z a {
 	color: #fff;
 	background: #057;
 	border-color: #37a;
 }
 html.z .logout,
+html.z #lo,
 html.z a.r {
 	background: #804;
 	border-color: #c28;
@@ -180,18 +216,34 @@ html.z a.g {
 	border-color: #af4;
 	box-shadow: 0 .3em 1em #7d0;
 }
+form {
+	line-height: 2.5em;
+}
+#x,
 input {
 	color: #a50;
 	background: #fff;
 	border: 1px solid #a50;
-	border-radius: .5em;
-	padding: .5em .7em;
-	margin: 0 .5em 0 0;
+	border-radius: .3em;
+	padding: .25em .6em;
+	margin: 0 .3em 0 0;
+	font-size: 1em;
 }
+input::placeholder {
+	font-size: 1.2em;
+	font-style: italic;
+	letter-spacing: .04em;
+	opacity: 0.64;
+	color: #930;
+}
+#x,
 html.z input {
 	color: #fff;
 	background: #626;
 	border-color: #c2c;
+}
+html.z input::placeholder {
+	color: #fff;
 }
 html.z .num {
 	border-color: #777;
@@ -201,4 +253,7 @@ html.z .num {
 html.bz {
 	color: #bbd;
 	background: #11121d;
+}
+html.bz .vols img {
+	filter: sepia(0.8) hue-rotate(180deg);
 }

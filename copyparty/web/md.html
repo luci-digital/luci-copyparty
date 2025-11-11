@@ -3,13 +3,13 @@
 	<title>📝 {{ title }}</title>
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
 	<meta name="viewport" content="width=device-width, initial-scale=0.7">
-	<meta name="theme-color" content="#333">
-{{ html_head }}
+	<meta name="theme-color" content="#{{ tcolor }}">
 	<link rel="stylesheet" href="{{ r }}/.cpr/ui.css?_={{ ts }}">
 	<link rel="stylesheet" href="{{ r }}/.cpr/md.css?_={{ ts }}">
 	{%- if edit %}
 	<link rel="stylesheet" href="{{ r }}/.cpr/md2.css?_={{ ts }}">
 	{%- endif %}
+{{ html_head }}
 </head>
 <body>
 	<div id="mn"></div>
@@ -49,7 +49,7 @@
 		<div id="mp" class="mdo"></div>
 	</div>
 	<a href="#" id="repl">π</a>
-	
+
 	{%- if edit %}
 	<div id="helpbox">
 		<textarea autocomplete="off">
@@ -125,12 +125,13 @@ write markdown (most html is 🙆 too)
 		</textarea>
 	</div>
 	{%- endif %}
-	
+
 	<script>
 
-var SR = {{ r|tojson }},
+var SR = "{{ r }}",
 	last_modified = {{ lastmod }},
-	have_emp = {{ have_emp|tojson }},
+	have_emp = {{ have_emp }},
+	md_no_br = {{ md_no_br }},
 	dfavico = "{{ favico }}";
 
 var md_opt = {
@@ -139,16 +140,15 @@ var md_opt = {
 };
 
 (function () {
-	var l = localStorage,
-		drk = l.light != 1,
+	var l = window.localStorage,
+		drk = (l && l.light) != 1,
 		btn = document.getElementById("lightswitch"),
 		f = function (e) {
 if (e) { e.preventDefault(); drk = !drk; }
 document.documentElement.className = drk? "z":"y";
 btn.innerHTML = "go " + (drk ? "light":"dark");
-l.light = drk? 0:1;
+try { l.light = drk? 0:1; } catch (ex) { }
 		};
-	
 	btn.onclick = f;
 	f();
 })();
@@ -160,4 +160,8 @@ l.light = drk? 0:1;
 	{%- if edit %}
 	<script src="{{ r }}/.cpr/md2.js?_={{ ts }}"></script>
 	{%- endif %}
+	{%- if js %}
+	<script src="{{ js }}_={{ ts }}"></script>
+	{%- endif %}
 </body></html>
+

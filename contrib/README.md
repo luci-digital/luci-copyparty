@@ -7,20 +7,36 @@
 * works on windows, linux and macos
 * assumes `copyparty-sfx.py` was renamed to `copyparty.py` in the same folder as `copyparty.bat`
 
+### [`setup-ashell.sh`](setup-ashell.sh)
+* run copyparty on an iPhone/iPad using [a-Shell](https://holzschu.github.io/a-Shell_iOS/)
+* not very useful due to limitations in iOS:
+  * not able to share all of your phone's storage
+  * cannot run in the background
+
 ### [`index.html`](index.html)
 * drop-in redirect from an httpd to copyparty
 * assumes the webserver and copyparty is running on the same server/IP
 * modify `10.13.1.1` as necessary if you wish to support browsers without javascript
 
-### [`sharex.sxcu`](sharex.sxcu)
-* sharex config file to upload screenshots and grab the URL
+### [`sharex.sxcu`](sharex.sxcu) - Windows screenshot uploader
+* [sharex](https://getsharex.com/) config file to upload screenshots and grab the URL
+* `RequestURL`: full URL to the target folder
+* `pw`: password (remove the `pw` line if anon-write)
+* the `act:bput` thing is optional since copyparty v1.9.29
+* using an older sharex version, maybe sharex v12.1.1 for example? dw fam i got your back 👉😎👉 [`sharex12.sxcu`](sharex12.sxcu)
+
+### [`ishare.iscu`](ishare.iscu) - MacOS screenshot uploader
+* [ishare](https://isharemac.app/) config file to upload screenshots and grab the URL
 * `RequestURL`: full URL to the target folder
 * `pw`: password (remove the `pw` line if anon-write)
 
-however if your copyparty is behind a reverse-proxy, you may want to use [`sharex-html.sxcu`](sharex-html.sxcu) instead:
-* `RequestURL`: full URL to the target folder
-* `URL`: full URL to the root folder (with trailing slash) followed by `$regex:1|1$`
-* `pw`: password (remove `Parameters` if anon-write)
+### [`flameshot.sh`](flameshot.sh) - Linux screenshot uploader
+* takes a screenshot with [flameshot](https://flameshot.org/) on Linux, uploads it, and writes the URL to clipboard
+
+### [`send-to-cpp.contextlet.json`](send-to-cpp.contextlet.json)
+* browser integration, kind of? custom rightclick actions and stuff
+* rightclick a pic and send it to copyparty straight from your browser
+* for the [contextlet](https://addons.mozilla.org/en-US/firefox/addon/contextlets/) firefox extension
 
 ### [`media-osd-bgone.ps1`](media-osd-bgone.ps1)
 * disables the [windows OSD popup](https://user-images.githubusercontent.com/241032/122821375-0e08df80-d2dd-11eb-9fd9-184e8aacf1d0.png) (the thing on the left) which appears every time you hit media hotkeys to adjust volume or change song while playing music with the copyparty web-ui, or most other audio players really
@@ -40,6 +56,36 @@ however if your copyparty is behind a reverse-proxy, you may want to use [`share
 * give a 3rd argument to install it to your copyparty config
 * systemd service at [`systemd/cfssl.service`](systemd/cfssl.service)
 
+### [`zfs-tune.py`](zfs-tune.py)
+* optimizes databases for optimal performance when stored on a zfs filesystem; also see [openzfs docs](https://openzfs.github.io/openzfs-docs/Performance%20and%20Tuning/Workload%20Tuning.html#database-workloads) and specifically the SQLite subsection
+
+# Infrastructure as Code (IaC) for Synology NAS
+automated deployment and management of copyparty on Synology NAS devices
+
+### [`iac/`](iac/)
+* comprehensive infrastructure as code solutions for Synology NAS
+* includes Terraform/OpenTofu, Ansible, and MCP server
+* see [IaC README](iac/README.md) for comparison and quick start
+
+### [`iac/terraform/`](iac/terraform/)
+* Terraform/OpenTofu configuration for declarative infrastructure
+* state management and drift detection
+* version-controlled, reproducible deployments
+* supports multiple Synology devices with workspaces
+
+### [`iac/ansible/`](iac/ansible/)
+* Ansible playbook for automated deployment and configuration
+* multi-host support for deploying to multiple NAS devices
+* idempotent and easy to learn
+* includes inventory management and group variables
+
+### [`mcp-synology/`](mcp-synology/)
+* Model Context Protocol (MCP) server for AI-assisted NAS management
+* works with Claude Desktop and Claude Code
+* natural language interface for container management
+* exposes tools, resources, and prompts for Synology operations
+* includes Docker management, system monitoring, and copyparty deployment
+
 # OS integration
 init-scripts to start copyparty as a service
 * [`systemd/copyparty.service`](systemd/copyparty.service) runs the sfx normally
@@ -48,5 +94,10 @@ init-scripts to start copyparty as a service
 * [`openrc/copyparty`](openrc/copyparty)
 
 # Reverse-proxy
-copyparty has basic support for running behind another webserver
-* [`nginx/copyparty.conf`](nginx/copyparty.conf)
+copyparty supports running behind another webserver
+* [`apache/copyparty.conf`](apache/copyparty.conf)
+* [`haproxy/copyparty.conf`](haproxy/copyparty.conf)
+* [`lighttpd/subdomain.conf`](lighttpd/subdomain.conf)
+* [`lighttpd/subpath.conf`](lighttpd/subpath.conf)
+* [`nginx/copyparty.conf`](nginx/copyparty.conf) -- recommended
+* [`traefik/copyparty.yaml`](traefik/copyparty.yaml)

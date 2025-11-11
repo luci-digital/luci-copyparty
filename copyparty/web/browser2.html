@@ -6,7 +6,6 @@
 	<title>{{ title }}</title>
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
 	<meta name="viewport" content="width=device-width, initial-scale=0.8">
-{{ html_head }}
 	<style>
 		html{font-family:sans-serif}
 		td{border:1px solid #999;border-width:1px 1px 0 0;padding:0 5px}
@@ -52,12 +51,13 @@
 
 		</tbody>
 	</table>
-	
+
 	{%- if logues[1] %}
 	<div>{{ logues[1] }}</div><br />
 	{%- endif %}
-	
+
 	<h2><a href="{{ r }}/{{ url_suf }}{{ url_suf and '&amp;' or '?' }}h">control-panel</a></h2>
 
 </body>
 </html>
+

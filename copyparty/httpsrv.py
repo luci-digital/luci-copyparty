@@ -1,7 +1,7 @@
 # coding: utf-8
 from __future__ import print_function, unicode_literals
 
-import base64
+import hashlib
 import math
 import os
 import re
@@ -12,7 +12,7 @@ import time
 
 import queue
 
-from .__init__ import ANYWIN, CORES, EXE, MACOS, TYPE_CHECKING, EnvParams
+from .__init__ import ANYWIN, CORES, EXE, MACOS, PY2, TYPE_CHECKING, EnvParams, unicode
 
 try:
     MNFE = ModuleNotFoundError
@@ -61,26 +61,44 @@ from .u2idx import U2idx
 from .util import (
     E_SCK,
     FHC,
+    CachedDict,
     Daemon,
     Garda,
     Magician,
     Netdev,
     NetMap,
-    absreal,
+    build_netmap,
+    has_resource,
     ipnorm,
+    load_ipr,
+    load_ipu,
+    load_resource,
     min_ex,
     shut_socket,
     spack,
     start_log_thrs,
     start_stackmon,
+    ub64enc,
 )
 
 if TYPE_CHECKING:
+    from .authsrv import VFS
     from .broker_util import BrokerCli
     from .ssdp import SSDPr
 
 if True:  # pylint: disable=using-constant-test
     from typing import Any, Optional
+
+if PY2:
+    range = xrange  # type: ignore
+
+if not hasattr(socket, "AF_UNIX"):
+    setattr(socket, "AF_UNIX", -9001)
+
+
+def load_jinja2_resource(E: EnvParams, name: str):
+    with load_resource(E, "web/" + name, "r") as f:
+        return f.read()
 
 
 class HttpSrv(object):
@@ -103,9 +121,10 @@ class HttpSrv(object):
         self.t0 = time.time()
         nsuf = "-n{}-i{:x}".format(nid, os.getpid()) if nid else ""
         self.magician = Magician()
-        self.nm = NetMap([], {})
+        self.nm = NetMap([], [])
         self.ssdp: Optional["SSDPr"] = None
         self.gpwd = Garda(self.args.ban_pw)
+        self.gpwc = Garda(self.args.ban_pwc)
         self.g404 = Garda(self.args.ban_404)
         self.g403 = Garda(self.args.ban_403)
         self.g422 = Garda(self.args.ban_422, False)
@@ -114,9 +133,16 @@ class HttpSrv(object):
         self.bans: dict[str, int] = {}
         self.aclose: dict[str, int] = {}
 
+        dli: dict[str, tuple[float, int, "VFS", str, str]] = {}  # info
+        dls: dict[str, tuple[float, int]] = {}  # state
+        self.dli = self.tdli = dli
+        self.dls = self.tdls = dls
+        self.iiam = '<img src="%s.cpr/iiam.gif?cache=i" />' % (self.args.SRS,)
+
         self.bound: set[tuple[str, int]] = set()
         self.name = "hsrv" + nsuf
         self.mutex = threading.Lock()
+        self.u2mutex = threading.Lock()
         self.stopping = False
 
         self.tp_nthr = 0  # actual
@@ -128,6 +154,8 @@ class HttpSrv(object):
         self.t_periodic: Optional[threading.Thread] = None
 
         self.u2fh = FHC()
+        self.u2sc: dict[str, tuple[int, "hashlib._Hash"]] = {}
+        self.pipes = CachedDict(0.2)
         self.metrics = Metrics(self)
         self.nreq = 0
         self.nsus = 0
@@ -142,18 +170,39 @@ class HttpSrv(object):
         self.u2idx_free: dict[str, U2idx] = {}
         self.u2idx_n = 0
 
+        assert jinja2  # type: ignore  # !rm
         env = jinja2.Environment()
-        env.loader = jinja2.FileSystemLoader(os.path.join(self.E.mod, "web"))
-        jn = ["splash", "svcs", "browser", "browser2", "msg", "md", "mde", "cf"]
+        env.loader = jinja2.FunctionLoader(lambda f: load_jinja2_resource(self.E, f))
+        jn = [
+            "browser",
+            "browser2",
+            "cf",
+            "idp",
+            "md",
+            "mde",
+            "msg",
+            "rups",
+            "shares",
+            "splash",
+            "svcs",
+        ]
         self.j2 = {x: env.get_template(x + ".html") for x in jn}
-        zs = os.path.join(self.E.mod, "web", "deps", "prism.js.gz")
-        self.prism = os.path.exists(zs)
+        self.j2["opds"] = env.get_template("opds.xml")
+        self.prism = has_resource(self.E, "web/deps/prism.js.gz")
 
-        self.statics: set[str] = set()
-        self._build_statics()
+        if self.args.ipu:
+            self.ipu_iu, self.ipu_nm = load_ipu(self.log, self.args.ipu)
+        else:
+            self.ipu_iu = self.ipu_nm = None
 
-        self.ptn_cc = re.compile(r"[\x00-\x1f]")
-        self.ptn_hsafe = re.compile(r"[\x00-\x1f<>\"'&]")
+        if self.args.ipr:
+            self.ipr = load_ipr(self.log, self.args.ipr)
+        else:
+            self.ipr = None
+
+        self.ipa_nm = build_netmap(self.args.ipa)
+        self.xff_nm = build_netmap(self.args.xff_src)
+        self.xff_lan = build_netmap("lan")
 
         self.mallow = "GET HEAD POST PUT DELETE OPTIONS".split()
         if not self.args.no_dav:
@@ -169,6 +218,9 @@ class HttpSrv(object):
             self.start_threads(4)
 
         if nid:
+            self.tdli = {}
+            self.tdls = {}
+
             if self.args.stackmon:
                 start_stackmon(self.args.stackmon, nid)
 
@@ -185,20 +237,12 @@ class HttpSrv(object):
         except:
             pass
 
-    def _build_statics(self) -> None:
-        for dp, _, df in os.walk(os.path.join(self.E.mod, "web")):
-            for fn in df:
-                ap = absreal(os.path.join(dp, fn))
-                self.statics.add(ap)
-                if ap.endswith(".gz") or ap.endswith(".br"):
-                    self.statics.add(ap[:-3])
-
     def set_netdevs(self, netdevs: dict[str, Netdev]) -> None:
         ips = set()
         for ip, _ in self.bound:
             ips.add(ip)
 
-        self.nm = NetMap(list(ips), netdevs)
+        self.nm = NetMap(list(ips), list(netdevs))
 
     def start_threads(self, n: int) -> None:
         self.tp_nthr += n
@@ -213,14 +257,14 @@ class HttpSrv(object):
         if self.args.log_htp:
             self.log(self.name, "workers -= {} = {}".format(n, self.tp_nthr), 6)
 
-        assert self.tp_q
+        assert self.tp_q  # !rm
         for _ in range(n):
             self.tp_q.put(None)
 
     def periodic(self) -> None:
         while True:
             time.sleep(2 if self.tp_ncli or self.ncli else 10)
-            with self.mutex:
+            with self.u2mutex, self.mutex:
                 self.u2fh.clean()
                 if self.tp_q:
                     self.tp_ncli = max(self.ncli, self.tp_ncli - 2)
@@ -232,15 +276,24 @@ class HttpSrv(object):
                     return
 
     def listen(self, sck: socket.socket, nlisteners: int) -> None:
+        tcp = sck.family != socket.AF_UNIX
+
         if self.args.j != 1:
             # lost in the pickle; redefine
             if not ANYWIN or self.args.reuseaddr:
                 sck.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-            sck.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            if tcp:
+                sck.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
             sck.settimeout(None)  # < does not inherit, ^ opts above do
 
-        ip, port = sck.getsockname()[:2]
+        if tcp:
+            ip, port = sck.getsockname()[:2]
+        else:
+            ip = re.sub(r"\.[0-9]+$", "", sck.getsockname().split("/")[-1])
+            port = 0
+
         self.srvs.append(sck)
         self.bound.add((ip, port))
         self.nclimax = math.ceil(self.args.nc * 1.0 / nlisteners)
@@ -252,16 +305,24 @@ class HttpSrv(object):
 
     def thr_listen(self, srv_sck: socket.socket) -> None:
         """listens on a shared tcp server"""
-        ip, port = srv_sck.getsockname()[:2]
         fno = srv_sck.fileno()
-        hip = "[{}]".format(ip) if ":" in ip else ip
-        msg = "subscribed @ {}:{}  f{} p{}".format(hip, port, fno, os.getpid())
+        if srv_sck.family == socket.AF_UNIX:
+            ip = re.sub(r"\.[0-9]+$", "", srv_sck.getsockname())
+            msg = "subscribed @ %s  f%d p%d" % (ip, fno, os.getpid())
+            ip = ip.split("/")[-1]
+            port = 0
+            tcp = False
+        else:
+            tcp = True
+            ip, port = srv_sck.getsockname()[:2]
+            hip = "[%s]" % (ip,) if ":" in ip else ip
+            msg = "subscribed @ %s:%d  f%d p%d" % (hip, port, fno, os.getpid())
+
         self.log(self.name, msg)
 
-        def fun() -> None:
-            self.broker.say("cb_httpsrv_up")
+        Daemon(self.broker.say, "sig-hsrv-up1", ("cb_httpsrv_up",))
 
-        threading.Thread(target=fun, name="sig-hsrv-up1").start()
+        saddr = ("", 0)  # fwd-decl for `except TypeError as ex:`
 
         while not self.stopping:
             if self.args.log_conn:
@@ -270,7 +331,8 @@ class HttpSrv(object):
             spins = 0
             while self.ncli >= self.nclimax:
                 if not spins:
-                    self.log(self.name, "at connection limit; waiting", 3)
+                    t = "at connection limit (global-option 'nc'); waiting"
+                    self.log(self.name, t, 3)
 
                 spins += 1
                 time.sleep(0.1)
@@ -321,8 +383,8 @@ class HttpSrv(object):
                 if nloris < nconn / 2:
                     continue
 
-                t = "slowloris (idle-conn): {} banned for {} min"
-                self.log(self.name, t.format(ip, self.args.loris, nclose), 1)
+                t = "slow%s (idle-conn): %s banned for %d min"  # slowloris
+                self.log(self.name, t % ("loris", ip, self.args.loris), 1)
                 self.bans[ip] = int(time.time() + self.args.loris * 60)
 
             if self.args.log_conn:
@@ -330,11 +392,13 @@ class HttpSrv(object):
 
             try:
                 sck, saddr = srv_sck.accept()
-                cip, cport = saddr[:2]
-                if cip.startswith("::ffff:"):
-                    cip = cip[7:]
-
-                addr = (cip, cport)
+                if tcp:
+                    cip = unicode(saddr[0])
+                    if cip.startswith("::ffff:"):
+                        cip = cip[7:]
+                    addr = (cip, saddr[1])
+                else:
+                    addr = ("127.8.3.7", sck.fileno())
             except (OSError, socket.error) as ex:
                 if self.stopping:
                     break
@@ -342,6 +406,19 @@ class HttpSrv(object):
                 self.log(self.name, "accept({}): {}".format(fno, ex), c=6)
                 time.sleep(0.02)
                 continue
+            except TypeError as ex:
+                # on macOS, accept() may return a None saddr if blocked by LittleSnitch;
+                # unicode(saddr[0]) ==> TypeError: 'NoneType' object is not subscriptable
+                if tcp and not saddr:
+                    t = "accept(%s): failed to accept connection from client due to firewall or network issue"
+                    self.log(self.name, t % (fno,), c=3)
+                    try:
+                        sck.close()  # type: ignore
+                    except:
+                        pass
+                    time.sleep(0.02)
+                    continue
+                raise
 
             if self.args.log_conn:
                 t = "|{}C-acc2 \033[0;36m{} \033[3{}m{}".format(
@@ -390,7 +467,7 @@ class HttpSrv(object):
         )
 
     def thr_poolw(self) -> None:
-        assert self.tp_q
+        assert self.tp_q  # !rm
         while True:
             task = self.tp_q.get()
             if not task:
@@ -495,15 +572,15 @@ class HttpSrv(object):
 
             v = self.E.t0
             try:
-                with os.scandir(os.path.join(self.E.mod, "web")) as dh:
+                with os.scandir(self.E.mod_ + "web") as dh:
                     for fh in dh:
                         inf = fh.stat()
                         v = max(v, inf.st_mtime)
             except:
                 pass
 
-            v = base64.urlsafe_b64encode(spack(b">xxL", int(v)))
-            self.cb_v = v.decode("ascii")[-4:]
+            # spack gives 4 lsb, take 3 lsb, get 4 ch
+            self.cb_v = ub64enc(spack(b">L", int(v))[1:]).decode("ascii")
             self.cb_ts = time.time()
             return self.cb_v
 
@@ -534,3 +611,32 @@ class HttpSrv(object):
                 ident += "a"
 
             self.u2idx_free[ident] = u2idx
+
+    def read_dls(
+        self,
+    ) -> tuple[
+        dict[str, tuple[float, int, str, str, str]], dict[str, tuple[float, int]]
+    ]:
+        """
+        mp-broker asking for local dl-info + dl-state;
+        reduce overhead by sending just the vfs vpath
+        """
+        dli = {k: (a, b, c.vpath, d, e) for k, (a, b, c, d, e) in self.dli.items()}
+        return (dli, self.dls)
+
+    def write_dls(
+        self,
+        sdli: dict[str, tuple[float, int, str, str, str]],
+        dls: dict[str, tuple[float, int]],
+    ) -> None:
+        """
+        mp-broker pushing total dl-info + dl-state;
+        swap out the vfs vpath with the vfs node
+        """
+        dli: dict[str, tuple[float, int, "VFS", str, str]] = {}
+        for k, (a, b, c, d, e) in sdli.items():
+            vn = self.asrv.vfs.all_nodes[c]
+            dli[k] = (a, b, vn, d, e)
+
+        self.tdli = dli
+        self.tdls = dls

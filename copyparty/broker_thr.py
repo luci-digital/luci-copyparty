@@ -5,7 +5,7 @@ import os
 import threading
 
 from .__init__ import TYPE_CHECKING
-from .broker_util import BrokerCli, ExceptionalQueue, try_exec
+from .broker_util import BrokerCli, ExceptionalQueue, NotExQueue
 from .httpsrv import HttpSrv
 from .util import HMaccas
 
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from .svchub import SvcHub
 
 if True:  # pylint: disable=using-constant-test
-    from typing import Any
+    from typing import Any, Union
 
 
 class BrokerThr(BrokerCli):
@@ -34,6 +34,7 @@ class BrokerThr(BrokerCli):
         self.iphash = HMaccas(os.path.join(self.args.E.cfg, "iphash"), 8)
         self.httpsrv = HttpSrv(self, None)
         self.reload = self.noop
+        self.reload_sessions = self.noop
 
     def shutdown(self) -> None:
         # self.log("broker", "shutting down")
@@ -42,26 +43,21 @@ class BrokerThr(BrokerCli):
     def noop(self) -> None:
         pass
 
-    def ask(self, dest: str, *args: Any) -> ExceptionalQueue:
+    def ask(self, dest: str, *args: Any) -> Union[ExceptionalQueue, NotExQueue]:
 
         # new ipc invoking managed service in hub
         obj = self.hub
         for node in dest.split("."):
             obj = getattr(obj, node)
 
-        rv = try_exec(True, obj, *args)
-
-        # pretend we're broker_mp
-        retq = ExceptionalQueue(1)
-        retq.put(rv)
-        return retq
+        return NotExQueue(obj(*args))  # type: ignore
 
     def say(self, dest: str, *args: Any) -> None:
-        if dest == "listen":
+        if dest == "httpsrv.listen":
             self.httpsrv.listen(args[0], 1)
             return
 
-        if dest == "set_netdevs":
+        if dest == "httpsrv.set_netdevs":
             self.httpsrv.set_netdevs(args[0])
             return
 
@@ -70,4 +66,4 @@ class BrokerThr(BrokerCli):
         for node in dest.split("."):
             obj = getattr(obj, node)
 
-        try_exec(False, obj, *args)
+        obj(*args)  # type: ignore

@@ -1,7 +1,7 @@
 # [`u2c.py`](u2c.py)
 * command-line up2k client [(webm)](https://ocv.me/stuff/u2cli.webm)
 * file uploads, file-search, autoresume of aborted/broken uploads
-* sync local folder to server
+* [sync local folder to server](https://github.com/9001/copyparty/#folder-sync)
 * generally faster than browsers
 * if something breaks just restart it
 
@@ -15,22 +15,18 @@ produces a chronological list of all uploads by collecting info from up2k databa
 # [`partyfuse.py`](partyfuse.py)
 * mount a copyparty server as a local filesystem (read-only)
 * **supports Windows!** -- expect `194 MiB/s` sequential read
-* **supports Linux** -- expect `117 MiB/s` sequential read
+* **supports Linux** -- expect `600 MiB/s` sequential read
 * **supports macos** -- expect `85 MiB/s` sequential read
-
-filecache is default-on for windows and macos;
-* macos readsize is 64kB, so speed ~32 MiB/s without the cache
-* windows readsize varies by software; explorer=1M, pv=32k
 
 note that copyparty should run with `-ed` to enable dotfiles (hidden otherwise)
 
-also consider using [../docs/rclone.md](../docs/rclone.md) instead for 5x performance
+and consider using [../docs/rclone.md](../docs/rclone.md) instead; usually a bit faster, especially on windows
 
 
 ## to run this on windows:
 * install [winfsp](https://github.com/billziss-gh/winfsp/releases/latest) and [python 3](https://www.python.org/downloads/)
   * [x] add python 3.x to PATH (it asks during install)
-* `python -m pip install --user fusepy`
+* `python -m pip install --user fusepy` (or grab a copy of `fuse.py` from the `connect` page on your copyparty, and keep it in the same folder)
 * `python ./partyfuse.py n: http://192.168.1.69:3923/`
 
 10% faster in [msys2](https://www.msys2.org/), 700% faster if debug prints are enabled:
@@ -82,3 +78,6 @@ cd /mnt/nas/music/.hist
 # [`prisonparty.sh`](prisonparty.sh)
 * run copyparty in a chroot, preventing any accidental file access
 * creates bindmounts for /bin, /lib, and so on, see `sysdirs=`
+
+# [`bubbleparty.sh`](bubbleparty.sh)
+* run copyparty in an isolated process, preventing any accidental file access and more

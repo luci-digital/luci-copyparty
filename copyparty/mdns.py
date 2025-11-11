@@ -2,6 +2,7 @@
 from __future__ import print_function, unicode_literals
 
 import errno
+import os
 import random
 import select
 import socket
@@ -12,27 +13,63 @@ from ipaddress import IPv4Network, IPv6Network
 from .__init__ import TYPE_CHECKING
 from .__init__ import unicode as U
 from .multicast import MC_Sck, MCast
-from .stolen.dnslib import AAAA
-from .stolen.dnslib import CLASS as DC
-from .stolen.dnslib import (
-    NSEC,
-    PTR,
-    QTYPE,
-    RR,
-    SRV,
-    TXT,
-    A,
-    DNSHeader,
-    DNSQuestion,
-    DNSRecord,
-)
-from .util import CachedSet, Daemon, Netdev, list_ips, min_ex
+from .util import IP6_LL, CachedSet, Daemon, Netdev, list_ips, min_ex
+
+try:
+    if os.getenv("PRTY_SYS_ALL") or os.getenv("PRTY_SYS_DNSLIB"):
+        raise ImportError()
+    from .stolen.dnslib import (
+        AAAA,
+    )
+    from .stolen.dnslib import CLASS as DC
+    from .stolen.dnslib import (
+        NSEC,
+        PTR,
+        QTYPE,
+        RR,
+        SRV,
+        TXT,
+        A,
+        DNSHeader,
+        DNSQuestion,
+        DNSRecord,
+        set_avahi_379,
+    )
+
+    DNS_VND = True
+except ImportError:
+    DNS_VND = False
+    from dnslib import (
+        AAAA,
+    )
+    from dnslib import CLASS as DC
+    from dnslib import (
+        NSEC,
+        PTR,
+        QTYPE,
+        RR,
+        SRV,
+        TXT,
+        A,
+        Bimap,
+        DNSHeader,
+        DNSQuestion,
+        DNSRecord,
+    )
+
+    DC.forward[0x8001] = "F_IN"
+    DC.reverse["F_IN"] = 0x8001
 
 if TYPE_CHECKING:
     from .svchub import SvcHub
 
 if True:  # pylint: disable=using-constant-test
     from typing import Any, Optional, Union
+
+if os.getenv("PRTY_MODSPEC"):
+    from inspect import getsourcefile
+
+    print("PRTY_MODSPEC: dnslib:", getsourcefile(A))
 
 
 MDNS4 = "224.0.0.251"
@@ -72,7 +109,11 @@ class MDNS(MCast):
         self.ngen = ngen
         self.ttl = 300
 
-        zs = self.args.name + ".local."
+        if not self.args.zm_nwa_1 and DNS_VND:
+            set_avahi_379()
+
+        zs = self.args.zm_fqdn or (self.args.name + ".local")
+        zs = zs.replace("--name", self.args.name).rstrip(".") + "."
         zs = zs.encode("ascii", "replace").decode("ascii", "replace")
         self.hn = "-".join(x for x in zs.split("?") if x) or (
             "vault-{}".format(random.randint(1, 255))
@@ -95,9 +136,14 @@ class MDNS(MCast):
         self.log_func(self.logsrc, msg, c)
 
     def build_svcs(self) -> tuple[dict[str, dict[str, Any]], set[str]]:
+        ar = self.args
         zms = self.args.zms
-        http = {"port": 80 if 80 in self.args.p else self.args.p[0]}
-        https = {"port": 443 if 443 in self.args.p else self.args.p[0]}
+
+        zi = ar.zm_http
+        http = {"port": zi if zi != -1 else 80 if 80 in ar.p else ar.p[0]}
+        zi = ar.zm_https
+        https = {"port": zi if zi != -1 else 443 if 443 in ar.p else ar.p[0]}
+
         webdav = http.copy()
         webdavs = https.copy()
         webdav["u"] = webdavs["u"] = "u"  # KDE requires username
@@ -122,16 +168,16 @@ class MDNS(MCast):
 
         svcs: dict[str, dict[str, Any]] = {}
 
-        if "d" in zms:
+        if "d" in zms and http["port"]:
             svcs["_webdav._tcp.local."] = webdav
 
-        if "D" in zms:
+        if "D" in zms and https["port"]:
             svcs["_webdavs._tcp.local."] = webdavs
 
-        if "h" in zms:
+        if "h" in zms and http["port"]:
             svcs["_http._tcp.local."] = http
 
-        if "H" in zms:
+        if "H" in zms and https["port"]:
             svcs["_https._tcp.local."] = https
 
         if "f" in zms.lower():
@@ -292,6 +338,22 @@ class MDNS(MCast):
     def run2(self) -> None:
         last_hop = time.time()
         ihop = self.args.mc_hop
+
+        try:
+            if self.args.no_poll:
+                raise Exception()
+            fd2sck = {}
+            srvpoll = select.poll()
+            for sck in self.srv:
+                fd = sck.fileno()
+                fd2sck[fd] = sck
+                srvpoll.register(fd, select.POLLIN)
+        except Exception as ex:
+            srvpoll = None
+            if not self.args.no_poll:
+                t = "WARNING: failed to poll(), will use select() instead: %r"
+                self.log(t % (ex,), 3)
+
         while self.running:
             timeout = (
                 0.02 + random.random() * 0.07
@@ -300,8 +362,13 @@ class MDNS(MCast):
                 if self.unsolicited
                 else (last_hop + ihop if ihop else 180)
             )
-            rdy = select.select(self.srv, [], [], timeout)
-            rx: list[socket.socket] = rdy[0]  # type: ignore
+            if srvpoll:
+                pr = srvpoll.poll(timeout * 1000)
+                rx = [fd2sck[x[0]] for x in pr if x[1] & select.POLLIN]
+            else:
+                rdy = select.select(self.srv, [], [], timeout)
+                rx: list[socket.socket] = rdy[0]  # type: ignore
+
             self.rx4.cln()
             self.rx6.cln()
             buf = b""
@@ -314,6 +381,9 @@ class MDNS(MCast):
                     if not self.running:
                         self.log("stopped", 2)
                         return
+
+                    if self.args.zm_no_pe:
+                        continue
 
                     t = "{} {} \033[33m|{}| {}\n{}".format(
                         self.srv[sck].name, addr, len(buf), repr(buf)[2:-1], min_ex()
@@ -340,13 +410,13 @@ class MDNS(MCast):
             except:
                 pass
 
-        self.srv = {}
+        self.srv.clear()
 
     def eat(self, buf: bytes, addr: tuple[str, int], sck: socket.socket) -> None:
         cip = addr[0]
         v6 = ":" in cip
         if (cip.startswith("169.254") and not self.ll_ok) or (
-            v6 and not cip.startswith("fe80")
+            v6 and not cip.startswith(IP6_LL)
         ):
             return
 
